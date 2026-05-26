@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-sqlite"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("SQLITE_DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  employeeId    String?  @unique
+  role          String
+  dateOfJoining DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  traineeProfile     TraineeProfile?
+  trainerAssignments TraineeProfile[] @relation("TrainerAssignments")
+  qaAssignments      TraineeProfile[] @relation("QAAssignments")
+  enrollments        Enrollment[]
+  lessonProgress     LessonProgress[]
+  quizAttempts       QuizAttempt[]
+  assignmentSubs     AssignmentSubmission[]
+  dailySubmissions   DailySubmission[]
+  qaReviews          QAReview[]         @relation("QAReviewer")
+  trainerReviews     TrainerReview[]    @relation("TrainerReviewer")
+  achievements       UserAchievement[]
+  learningStreak     LearningStreak?
+  lessonNotes        LessonNote[]
+  discussions        DiscussionComment[]
+}
+
+model TraineeProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectAssigned   String?
+  trainerId         String?
+  trainer           User?    @relation("TrainerAssignments", fields: [trainerId], references: [id])
+  qaId              String?
+  qa                User?    @relation("QAAssignments", fields: [qaId], references: [id])
+  trainingStarted   Boolean  @default(false)
+  trainingStatus    String   @default("REGISTERED")
+  readyForProduction Boolean @default(false)
+  currentDayNumber  Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  thumbnail   String?
+  published   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modules         Module[]
+  enrollments     Enrollment[]
+  completionRules CompletionRule[]
+  prerequisites   Prerequisite[]      @relation("CoursePrereq")
+  requiredFor     Prerequisite[]      @relation("PrereqCourse")
+  pathCourses     LearningPathCourse[]
+  dayRequirements DayRequiredLearning[]
+}
+
+model LearningPath {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses LearningPathCourse[]
+}
+
+model LearningPathCourse {
+  id       String @id @default(cuid())
+  pathId   String
+  path     LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order    Int    @default(0)
+
+  @@unique([pathId, courseId])
+}
+
+model Module {
+  id          String @id @default(cuid())
+  courseId    String
+  course      Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  order       Int    @default(0)
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id             String @id @default(cuid())
+  moduleId       String
+  module         Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  order          Int    @default(0)
+  lessonType     String @default("CONTENT")
+  durationMin    Int?
+  topics         Topic[]
+  quiz           Quiz?
+  assignment     Assignment?
+  progress       LessonProgress[]
+  notes          LessonNote[]
+  discussions    DiscussionComment[]
+  dayRequirements DayRequiredLearning[]
+}
+
+model Topic {
+  id          String @id @default(cuid())
+  lessonId    String
+  lesson      Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title       String
+  contentType String
+  contentUrl  String?
+  contentBody String?
+  order       Int    @default(0)
+  durationSec Int?
+}
+
+model Quiz {
+  id           String @id @default(cuid())
+  lessonId     String @unique
+  lesson       Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title        String
+  passingScore Int    @default(70)
+  questions    QuizQuestion[]
+  attempts     QuizAttempt[]
+}
+
+model QuizQuestion {
+  id       String @id @default(cuid())
+  quizId   String
+  quiz     Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question String
+  options  String
+  correct  String
+  order    Int    @default(0)
+}
+
+model Assignment {
+  id           String @id @default(cuid())
+  lessonId     String @unique
+  lesson       Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title        String
+  instructions String?
+  submissions  AssignmentSubmission[]
+}
+
+model Prerequisite {
+  id             String @id @default(cuid())
+  courseId       String
+  course         Course @relation("CoursePrereq", fields: [courseId], references: [id], onDelete: Cascade)
+  prereqCourseId String
+  prereqCourse   Course @relation("PrereqCourse", fields: [prereqCourseId], references: [id], onDelete: Cascade)
+}
+
+model CompletionRule {
+  id                String @id @default(cuid())
+  courseId          String
+  course            Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  requireAllLessons Boolean @default(true)
+  requireQuizPass   Boolean @default(true)
+  minWatchPercent   Int     @default(90)
+}
+
+model Enrollment {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId        String
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status          String   @default("NOT_STARTED")
+  progressPercent Float    @default(0)
+  lastLessonId    String?
+  lastActivityAt  DateTime?
+  totalTimeSec    Int      @default(0)
+  enrolledAt      DateTime @default(now())
+  completedAt     DateTime?
+
+  @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId       String
+  lesson         Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completed      Boolean  @default(false)
+  watchPercent   Float    @default(0)
+  timeSpentSec   Int      @default(0)
+  quizScore      Float?
+  quizPassed     Boolean  @default(false)
+  assignmentDone Boolean  @default(false)
+  completedAt    DateTime?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  score     Float
+  passed    Boolean
+  answers   String
+  createdAt DateTime @default(now())
+}
+
+model AssignmentSubmission {
+  id           String @id @default(cuid())
+  userId       String
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  content      String?
+  submittedAt  DateTime @default(now())
+}
+
+model LearningStreak {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak Int      @default(0)
+  longestStreak Int      @default(0)
+  lastLearnDate DateTime?
+}
+
+model Achievement {
+  id          String @id @default(cuid())
+  code        String @unique
+  title       String
+  description String?
+  icon        String?
+  milestone   Int?
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String @id @default(cuid())
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  earnedAt      DateTime @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model LessonNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  content   String
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+}
+
+model DiscussionComment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model TrainingDay {
+  id            Int    @id
+  title         String
+  projectName   String
+  description   String?
+  requiredLearn DayRequiredLearning[]
+  phases        TrainingPhaseConfig[]
+}
+
+model DayRequiredLearning {
+  id       String @id @default(cuid())
+  dayId    Int
+  day      TrainingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id])
+  lessonId String?
+  lesson   Lesson? @relation(fields: [lessonId], references: [id])
+  label    String
+  required Boolean @default(true)
+}
+
+model TrainingPhaseConfig {
+  id                 String @id @default(cuid())
+  dayId              Int
+  day                TrainingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  phase              String
+  productivityTarget Int
+  qualityTarget      Int
+  qcDeadline         String
+}
+
+model DailySubmission {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayNumber        Int
+  phase            String
+  sopRead          Boolean  @default(false)
+  tasksCompleted   Int      @default(0)
+  productivityPct  Float?
+  qualityPct       Float?
+  issues           String?
+  learningComplete Boolean  @default(false)
+  submittedAt      DateTime @default(now())
+
+  qaReview      QAReview?
+  trainerReview TrainerReview?
+
+  @@unique([userId, dayNumber, phase])
+}
+
+model QAReview {
+  id           String @id @default(cuid())
+  submissionId String @unique
+  submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User   @relation("QAReviewer", fields: [reviewerId], references: [id])
+  feedback     String?
+  errorCount   Int    @default(0)
+  qualityScore Float?
+  status       String @default("PENDING")
+  reviewedAt   DateTime?
+}
+
+model TrainerReview {
+  id           String @id @default(cuid())
+  submissionId String @unique
+  submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User   @relation("TrainerReviewer", fields: [reviewerId], references: [id])
+  remarks      String?
+  status       String @default("PENDING")
+  reviewedAt   DateTime?
+}
+
