@@ -32,6 +32,51 @@ model User {
   learningStreak     LearningStreak?
   lessonNotes        LessonNote[]
   discussions        DiscussionComment[]
+  onboardingProgress UserOnboardingProgress[]
+  certifications     ProjectCertification[]
+  createdProjects    Project[]          @relation("ProjectCreator")
+  projectAssignments ProjectAssignment[] @relation("ProjectAssignments")
+  createdAssignments ProjectAssignment[] @relation("AssignmentCreator")
+}
+
+model OnboardingStep {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  order       Int
+  title       String
+  day         String
+  duration    String
+  type        String
+  description String
+  projectKey  String   @default("landscape")
+
+  progress UserOnboardingProgress[]
+}
+
+model UserOnboardingProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stepId      String
+  step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  status      String    @default("LOCKED")
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, stepId])
+}
+
+model ProjectCertification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  score       Float
+  passed      Boolean
+  certifiedAt DateTime @default(now())
+
+  @@unique([userId, projectId])
 }
 
 model TraineeProfile {
@@ -361,4 +406,40 @@ model TrainerReview {
   remarks      String?
   status       String @default("PENDING")
   reviewedAt   DateTime?
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  category       String?
+  status         String   @default("ACTIVE")
+  startDate      DateTime?
+  endDate        DateTime?
+  priority       String   @default("MEDIUM")
+  resources      String?
+  documentation  String?
+  url            String?
+  createdBy      String
+  creator        User     @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  active         Boolean  @default(true)
+
+  assignments    ProjectAssignment[]
+  certifications ProjectCertification[]
+}
+
+model ProjectAssignment {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("ProjectAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy String
+  assigner   User     @relation("AssignmentCreator", fields: [assignedBy], references: [id])
+  assignedAt DateTime @default(now())
+  status     String   @default("ASSIGNED")
+
+  @@unique([projectId, userId])
 }

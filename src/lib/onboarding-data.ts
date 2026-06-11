@@ -2,27 +2,11 @@ export type OnboardingStatus = "done" | "active" | "pending" | "locked";
 
 export const onboardingSteps = [
   {
-    title: "Account & Tool Setup",
-    day: "Day 1",
-    duration: "~1 hr",
-    type: "Manual",
-    status: "done" as OnboardingStatus,
-    description: "Email, Slack, and SuperAnnotate credentials confirmed by Team Lead.",
-  },
-  {
-    title: "Read Company Policies",
-    day: "Day 1",
-    duration: "~30 min",
-    type: "Self-read",
-    status: "active" as OnboardingStatus,
-    description: "Confidentiality, quality, attendance, and communication guidelines.",
-  },
-  {
     title: "Team Introduction",
     day: "Day 1",
     duration: "~30 min",
     type: "Manual",
-    status: "pending" as OnboardingStatus,
+    status: "active" as OnboardingStatus,
     description: "Join standup and meet your team lead and fellow annotators.",
   },
   {

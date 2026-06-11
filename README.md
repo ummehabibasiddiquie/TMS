@@ -57,6 +57,18 @@ npm run prisma:generate:sqlite
 npm run db:migrate:sqlite-to-mysql
 ```
 
+## Documentation
+
+See [docs/README.md](docs/README.md) for the full list.
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/DATABASE-DESIGN.md](docs/DATABASE-DESIGN.md) | Database schema & ERD |
+| [docs/DATA-FLOW.md](docs/DATA-FLOW.md) | Data flow diagrams |
+| [docs/DIAGRAMS.md](docs/DIAGRAMS.md) | 3 diagrams for manager (export PNG) |
+| [docs/SYSTEM-DOCUMENTATION.md](docs/SYSTEM-DOCUMENTATION.md) | Dev reference |
+| [docs/DEVELOPMENT-LOG.md](docs/DEVELOPMENT-LOG.md) | Change log |
+
 ## Key Routes
 
 | Path | Description |
