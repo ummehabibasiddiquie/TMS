@@ -6,7 +6,7 @@
   "env": {
     "DATABASE_URL": {
       "description": "MySQL database connection URL from Hostinger",
-      "value": "mysql://USERNAME:PASSWORD@HOST:3306/DATABASE_NAME"
+      "value": "mysql://root:TFShrms@123()@HOST:3306/tms_prod"
     }
   }
 }
