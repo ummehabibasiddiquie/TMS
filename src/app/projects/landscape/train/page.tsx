@@ -6,6 +6,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { landscapeModules } from "@/lib/onboarding-data";
 import { prisma } from "@/lib/db";
 
+// Note: This page is kept for backward compatibility with the Landscape training content
+// The training modules are now managed through the Course system
+
 export default async function LandscapeTrainingPage() {
   const user = await getSession();
   if (!user) redirect("/login");

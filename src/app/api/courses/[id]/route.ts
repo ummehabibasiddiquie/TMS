@@ -9,12 +9,13 @@ export async function PATCH(
   const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { title, description, published } = await req.json();
+  const { title, description, published, thumbnail } = await req.json();
   const course = await prisma.course.update({
     where: { id: params.id },
     data: {
       title: title?.trim(),
       description: description !== undefined ? description?.trim() || null : undefined,
+      thumbnail: thumbnail !== undefined ? thumbnail || null : undefined,
       published: published ?? undefined,
     },
   });

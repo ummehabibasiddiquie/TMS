@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, X, FolderOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, X, FolderOpen, Image as ImageIcon, Upload } from "lucide-react";
 
 type Course = {
   id: string;
   title: string;
   description: string | null;
+  thumbnail: string | null;
   published: boolean;
   modules: { _count: { lessons: number } }[];
   _count: { enrollments: number };
@@ -25,12 +26,13 @@ export function CourseManager({
   const [courses, setCourses] = useState(initial);
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Course | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", published: false });
+  const [form, setForm] = useState({ title: "", description: "", published: false, thumbnail: "" });
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
   function openCreate() {
-    setForm({ title: "", description: "", published: false });
+    setForm({ title: "", description: "", published: false, thumbnail: "" });
     setEditing(null);
     setModal("create");
     setError("");
@@ -41,10 +43,37 @@ export function CourseManager({
       title: c.title,
       description: c.description ?? "",
       published: c.published,
+      thumbnail: c.thumbnail ?? "",
     });
     setEditing(c);
     setModal("edit");
     setError("");
+  }
+
+  async function handleImageUpload(file: File) {
+    setUploading(true);
+    setError("");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      setUploading(false);
+
+      if (!res.ok) {
+        setError(data.error || "Failed to upload image");
+        return;
+      }
+
+      setForm({ ...form, thumbnail: data.url });
+    } catch (err) {
+      setUploading(false);
+      setError("Failed to upload image");
+    }
   }
 
   async function save() {
@@ -96,15 +125,24 @@ export function CourseManager({
         {courses.map((c) => (
           <div key={c.id} className="glass-panel p-6">
             <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <h3 className="text-xl font-semibold">{c.title}</h3>
-                <p className="mt-1 text-sm text-slate-400">{c.description || "No description"}</p>
-                <div className="mt-3 flex gap-4 text-sm text-slate-500">
-                  <span>{c.modules.length} modules</span>
-                  <span>
-                    {c.modules.reduce((s, m) => s + m._count.lessons, 0)} lessons
-                  </span>
-                  <span>{c._count.enrollments} enrolled</span>
+              <div className="flex gap-4">
+                {c.thumbnail && (
+                  <img
+                    src={c.thumbnail}
+                    alt={c.title}
+                    className="h-24 w-24 rounded-lg object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold">{c.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{c.description || "No description"}</p>
+                  <div className="mt-3 flex gap-4 text-sm text-slate-500">
+                    <span>{c.modules.length} modules</span>
+                    <span>
+                      {c.modules.reduce((s, m) => s + m._count.lessons, 0)} lessons
+                    </span>
+                    <span>{c._count.enrollments} enrolled</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -176,6 +214,44 @@ export function CourseManager({
                   rows={3}
                   className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
                 />
+              </div>
+              <div>
+                <label className="text-sm text-slate-400">Course Image</label>
+                <div className="mt-2 space-y-2">
+                  {form.thumbnail ? (
+                    <div className="relative inline-block">
+                      <img
+                        src={form.thumbnail}
+                        alt="Course thumbnail"
+                        className="h-32 w-32 rounded-lg object-cover"
+                      />
+                      <button
+                        onClick={() => setForm({ ...form, thumbnail: "" })}
+                        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 rounded-lg border border-dashed border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-400 hover:border-blue-500 hover:text-blue-300 cursor-pointer">
+                        <Upload className="h-4 w-4" />
+                        <span>{uploading ? "Uploading..." : "Upload Image"}</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(file);
+                          }}
+                          disabled={uploading}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-xs text-slate-500">JPG, PNG, WEBP, GIF (max 5MB)</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <label className="flex items-center gap-2">
                 <input
