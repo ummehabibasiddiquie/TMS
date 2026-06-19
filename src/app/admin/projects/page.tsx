@@ -31,7 +31,7 @@ export default async function AdminProjectsPage() {
       },
     },
     orderBy: { createdAt: "desc" },
-  });
+  }) as any[];
 
   return (
     <AppShell user={user}>

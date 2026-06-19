@@ -2,11 +2,25 @@ import { redirect } from "next/navigation";
 import { Award, Download } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
-import { projects } from "@/lib/onboarding-data";
+import { prisma } from "@/lib/db";
 
 export default async function CertificationsPage() {
   const user = await getSession();
   if (!user) redirect("/login");
+
+  const certifications = await prisma.projectCertification.findMany({
+    where: { userId: user.id, passed: true },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          category: true,
+        },
+      },
+    },
+    orderBy: { certifiedAt: "desc" },
+  });
 
   return (
     <AppShell user={user}>
@@ -20,31 +34,32 @@ export default async function CertificationsPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {projects.map((project, index) => {
-            const certified = index === 0;
-            return (
-              <div key={project.key} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+          {certifications.length === 0 ? (
+            <div className="col-span-2 rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
+              <p className="text-slate-400">No certifications yet. Complete project quizzes to earn badges.</p>
+            </div>
+          ) : (
+            certifications.map((certification: any) => (
+              <div key={certification.id} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
                 <div className="flex gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">
-                    {certified ? <Award className="h-6 w-6" /> : project.initial}
+                    <Award className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="font-semibold text-white">{project.name}</h2>
-                    <p className="text-sm text-slate-500">{project.category}</p>
+                    <h2 className="font-semibold text-white">{certification.project.name}</h2>
+                    <p className="text-sm text-slate-500">{certification.project.category || "General"}</p>
                     <p className="mt-3 text-sm text-slate-300">
-                      {certified ? "Certified - issued 18 May 2025 - score 5 / 5" : "Coming Soon - training not yet available"}
+                      Certified - issued {new Date(certification.certifiedAt).toLocaleDateString()} - score {Math.round(certification.score * 100)}%
                     </p>
                   </div>
                 </div>
-                {certified && (
-                  <button className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200">
-                    <Download className="h-4 w-4" />
-                    Download Certificate PDF
-                  </button>
-                )}
+                <button className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200">
+                  <Download className="h-4 w-4" />
+                  Download Certificate PDF
+                </button>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
       </div>
     </AppShell>

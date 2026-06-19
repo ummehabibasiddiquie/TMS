@@ -96,13 +96,13 @@ export async function markStepDone(userId: string, stepId: string) {
 
 export async function recordCertification(
   userId: string,
-  projectKey: string,
+  projectId: string,
   score: number,
   passed: boolean
 ) {
   await prisma.projectCertification.upsert({
-    where: { userId_projectKey: { userId, projectKey } },
-    create: { userId, projectKey, score, passed },
+    where: { userId_projectId: { userId, projectId } },
+    create: { userId, projectId, score, passed },
     update: { score, passed, certifiedAt: new Date() },
   });
 

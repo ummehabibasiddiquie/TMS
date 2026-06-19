@@ -35,7 +35,6 @@ export default async function ProjectsPage() {
       where: { userId: user.id },
       include: {
         project: {
-          where: { active: true },
           include: {
             assignments: {
               include: {
@@ -55,7 +54,7 @@ export default async function ProjectsPage() {
 
     projects = assignments
       .map((a) => a.project)
-      .filter((p) => p !== null);
+      .filter((p) => p !== null && p.active);
   }
 
   return (

@@ -9,6 +9,8 @@ const ROLE_HOME: Record<Role, string> = {
   TRAINEE: "/",
   TRAINER: "/",
   ADMIN: "/",
+  TEAM_LEAD: "/",
+  EMPLOYEE: "/",
 };
 
 export default function LoginPage() {
