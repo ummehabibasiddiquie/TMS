@@ -8,333 +8,360 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
-  name          String
-  employeeId    String?  @unique
-  role          String
-  dateOfJoining DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  traineeProfile     TraineeProfile?
-  trainerAssignments TraineeProfile[] @relation("TrainerAssignments")
-  qaAssignments      TraineeProfile[] @relation("QAAssignments")
-  enrollments        Enrollment[]
-  lessonProgress     LessonProgress[]
-  quizAttempts       QuizAttempt[]
+  id                 String                   @id @default(cuid())
+  email              String                   @unique
+  passwordHash       String
+  name               String
+  employeeId         String?                  @unique
+  role               String
+  dateOfJoining      DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
   assignmentSubs     AssignmentSubmission[]
   dailySubmissions   DailySubmission[]
-  qaReviews          QAReview[]         @relation("QAReviewer")
-  trainerReviews     TrainerReview[]    @relation("TrainerReviewer")
-  achievements       UserAchievement[]
+  discussions        DiscussionComment[]
+  enrollments        Enrollment[]
   learningStreak     LearningStreak?
   lessonNotes        LessonNote[]
-  discussions        DiscussionComment[]
-  onboardingProgress UserOnboardingProgress[]
+  lessonProgress     LessonProgress[]
+  createdProjects    Project[]                @relation("ProjectCreator")
+  createdAssignments ProjectAssignment[]      @relation("AssignmentCreator")
+  projectAssignments ProjectAssignment[]      @relation("ProjectAssignments")
   certifications     ProjectCertification[]
-  createdProjects    Project[]          @relation("ProjectCreator")
-  projectAssignments ProjectAssignment[] @relation("ProjectAssignments")
-  createdAssignments ProjectAssignment[] @relation("AssignmentCreator")
+  qaReviews          QAReview[]               @relation("QAReviewer")
+  quizAttempts       QuizAttempt[]
+  qaAssignments      TraineeProfile[]         @relation("QAAssignments")
+  trainerAssignments TraineeProfile[]         @relation("TrainerAssignments")
+  traineeProfile     TraineeProfile?
+  trainerReviews     TrainerReview[]          @relation("TrainerReviewer")
+  achievements       UserAchievement[]
+  onboardingProgress UserOnboardingProgress[]
 }
 
 model OnboardingStep {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String                   @id @default(cuid())
+  slug        String                   @unique
   order       Int
   title       String
   day         String
   duration    String
   type        String
   description String
-  projectKey  String   @default("landscape")
-
-  progress UserOnboardingProgress[]
+  projectKey  String                   @default("landscape")
+  progress    UserOnboardingProgress[]
 }
 
 model UserOnboardingProgress {
-  id          String    @id @default(cuid())
+  id          String         @id @default(cuid())
   userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   stepId      String
-  step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  status      String    @default("LOCKED")
+  status      String         @default("LOCKED")
   completedAt DateTime?
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime       @updatedAt
+  step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, stepId])
+  @@index([stepId], map: "UserOnboardingProgress_stepId_fkey")
 }
 
 model ProjectCertification {
   id          String   @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   score       Float
   passed      Boolean
   certifiedAt DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+  @@index([projectId], map: "ProjectCertification_projectId_fkey")
 }
 
 model TraineeProfile {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectAssigned  String?
-  trainerId        String?
-  trainer          User?    @relation("TrainerAssignments", fields: [trainerId], references: [id])
-  qaId             String?
-  qa               User?    @relation("QAAssignments", fields: [qaId], references: [id])
-  trainingStarted  Boolean  @default(false)
-  trainingStatus   String   @default("REGISTERED")
-  readyForProduction Boolean @default(false)
-  currentDayNumber Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  projectAssigned    String?
+  trainerId          String?
+  qaId               String?
+  trainingStarted    Boolean  @default(false)
+  trainingStatus     String   @default("REGISTERED")
+  readyForProduction Boolean  @default(false)
+  currentDayNumber   Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  qa                 User?    @relation("QAAssignments", fields: [qaId], references: [id])
+  trainer            User?    @relation("TrainerAssignments", fields: [trainerId], references: [id])
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([qaId], map: "TraineeProfile_qaId_fkey")
+  @@index([trainerId], map: "TraineeProfile_trainerId_fkey")
 }
 
 model Course {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  thumbnail   String?
-  published   Boolean  @default(false)
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  modules          Module[]
-  enrollments      Enrollment[]
-  completionRules  CompletionRule[]
-  prerequisites    Prerequisite[]     @relation("CoursePrereq")
-  requiredFor      Prerequisite[]     @relation("PrereqCourse")
-  pathCourses      LearningPathCourse[]
-  dayRequirements  DayRequiredLearning[]
+  id              String                @id @default(cuid())
+  title           String
+  description     String?
+  thumbnail       String?
+  published       Boolean               @default(false)
+  createdById     String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  completionRules CompletionRule[]
+  dayRequirements DayRequiredLearning[]
+  enrollments     Enrollment[]
+  pathCourses     LearningPathCourse[]
+  modules         Module[]
+  prerequisites   Prerequisite[]        @relation("CoursePrereq")
+  requiredFor     Prerequisite[]        @relation("PrereqCourse")
 }
 
 model LearningPath {
-  id          String   @id @default(cuid())
+  id          String               @id @default(cuid())
   title       String
   description String?
-  published   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  courses LearningPathCourse[]
+  published   Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  courses     LearningPathCourse[]
 }
 
 model LearningPathCourse {
-  id       String @id @default(cuid())
+  id       String       @id @default(cuid())
   pathId   String
-  path     LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
   courseId String
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  order    Int    @default(0)
+  order    Int          @default(0)
+  course   Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  path     LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
 
   @@unique([pathId, courseId])
+  @@index([courseId], map: "LearningPathCourse_courseId_fkey")
 }
 
 model Module {
-  id          String @id @default(cuid())
+  id          String   @id @default(cuid())
   courseId    String
-  course      Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   title       String
   description String?
-  order       Int    @default(0)
+  order       Int      @default(0)
   lessons     Lesson[]
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId], map: "Module_courseId_fkey")
 }
 
 model Lesson {
-  id          String     @id @default(cuid())
-  moduleId    String
-  module      Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  order       Int        @default(0)
-  lessonType  String @default("CONTENT")
-  durationMin Int?
-  topics      Topic[]
-  quiz        Quiz?
-  assignment  Assignment?
-  progress    LessonProgress[]
-  notes       LessonNote[]
-  discussions DiscussionComment[]
+  id              String                @id @default(cuid())
+  moduleId        String
+  title           String
+  description     String?
+  order           Int                   @default(0)
+  lessonType      String                @default("CONTENT")
+  durationMin     Int?
+  assignment      Assignment?
   dayRequirements DayRequiredLearning[]
+  discussions     DiscussionComment[]
+  module          Module                @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  notes           LessonNote[]
+  progress        LessonProgress[]
+  quiz            Quiz?
+  topics          Topic[]
+
+  @@index([moduleId], map: "Lesson_moduleId_fkey")
 }
 
 model Topic {
-  id          String      @id @default(cuid())
+  id          String  @id @default(cuid())
   lessonId    String
-  lesson      Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   title       String
   contentType String
   contentUrl  String?
   contentBody String?
-  order       Int         @default(0)
+  order       Int     @default(0)
   durationSec Int?
+  lesson      Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId], map: "Topic_lessonId_fkey")
 }
 
 model Quiz {
-  id           String @id @default(cuid())
-  lessonId     String @unique
-  lesson       Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  id           String         @id @default(cuid())
+  lessonId     String         @unique
   title        String
-  passingScore Int    @default(70)
-  questions    QuizQuestion[]
+  passingScore Int            @default(70)
+  lesson       Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   attempts     QuizAttempt[]
+  questions    QuizQuestion[]
 }
 
 model QuizQuestion {
   id       String @id @default(cuid())
   quizId   String
-  quiz     Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
   question String
   options  String
   correct  String
   order    Int    @default(0)
+  quiz     Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId], map: "QuizQuestion_quizId_fkey")
 }
 
 model Assignment {
-  id          String @id @default(cuid())
-  lessonId    String @unique
-  lesson      Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  title       String
+  id           String                 @id @default(cuid())
+  lessonId     String                 @unique
+  title        String
   instructions String?
-  submissions AssignmentSubmission[]
+  lesson       Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  submissions  AssignmentSubmission[]
 }
 
 model Prerequisite {
   id             String @id @default(cuid())
   courseId       String
-  course         Course @relation("CoursePrereq", fields: [courseId], references: [id], onDelete: Cascade)
   prereqCourseId String
+  course         Course @relation("CoursePrereq", fields: [courseId], references: [id], onDelete: Cascade)
   prereqCourse   Course @relation("PrereqCourse", fields: [prereqCourseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId], map: "Prerequisite_courseId_fkey")
+  @@index([prereqCourseId], map: "Prerequisite_prereqCourseId_fkey")
 }
 
 model CompletionRule {
-  id                String @id @default(cuid())
+  id                String  @id @default(cuid())
   courseId          String
-  course            Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   requireAllLessons Boolean @default(true)
   requireQuizPass   Boolean @default(true)
   minWatchPercent   Int     @default(90)
+  course            Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId], map: "CompletionRule_courseId_fkey")
 }
 
 model Enrollment {
-  id               String           @id @default(cuid())
-  userId           String
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseId         String
-  course           Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  status           String @default("NOT_STARTED")
-  progressPercent  Float            @default(0)
-  lastLessonId     String?
-  lastActivityAt   DateTime?
-  totalTimeSec     Int              @default(0)
-  enrolledAt       DateTime         @default(now())
-  completedAt      DateTime?
+  id              String    @id @default(cuid())
+  userId          String
+  courseId        String
+  status          String    @default("NOT_STARTED")
+  progressPercent Float     @default(0)
+  lastLessonId    String?
+  lastActivityAt  DateTime?
+  totalTimeSec    Int       @default(0)
+  enrolledAt      DateTime  @default(now())
+  completedAt     DateTime?
+  course          Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+  @@index([courseId], map: "Enrollment_courseId_fkey")
 }
 
 model LessonProgress {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lessonId        String
-  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  completed       Boolean  @default(false)
-  watchPercent    Float    @default(0)
-  timeSpentSec    Int      @default(0)
-  quizScore       Float?
-  quizPassed      Boolean  @default(false)
-  assignmentDone  Boolean  @default(false)
-  completedAt     DateTime?
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  userId         String
+  lessonId       String
+  completed      Boolean   @default(false)
+  watchPercent   Float     @default(0)
+  timeSpentSec   Int       @default(0)
+  quizScore      Float?
+  quizPassed     Boolean   @default(false)
+  assignmentDone Boolean   @default(false)
+  completedAt    DateTime?
+  updatedAt      DateTime  @updatedAt
+  lesson         Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lessonId])
+  @@index([lessonId], map: "LessonProgress_lessonId_fkey")
 }
 
 model QuizAttempt {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   quizId    String
-  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   score     Float
   passed    Boolean
   answers   String
   createdAt DateTime @default(now())
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId], map: "QuizAttempt_quizId_fkey")
+  @@index([userId], map: "QuizAttempt_userId_fkey")
 }
 
 model AssignmentSubmission {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignmentId String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   content      String?
-  submittedAt  DateTime @default(now())
+  submittedAt  DateTime   @default(now())
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId], map: "AssignmentSubmission_assignmentId_fkey")
+  @@index([userId], map: "AssignmentSubmission_userId_fkey")
 }
 
 model LearningStreak {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentStreak Int      @default(0)
-  longestStreak Int      @default(0)
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
   lastLearnDate DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Achievement {
-  id          String @id @default(cuid())
-  code        String @unique
+  id          String            @id @default(cuid())
+  code        String            @unique
   title       String
   description String?
   icon        String?
   milestone   Int?
-
-  users UserAchievement[]
+  users       UserAchievement[]
 }
 
 model UserAchievement {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   achievementId String
+  earnedAt      DateTime    @default(now())
   achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
-  earnedAt      DateTime @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, achievementId])
+  @@index([achievementId], map: "UserAchievement_achievementId_fkey")
 }
 
 model LessonNote {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   lessonId  String
-  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   content   String
   updatedAt DateTime @updatedAt
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lessonId])
+  @@index([lessonId], map: "LessonNote_lessonId_fkey")
 }
 
 model DiscussionComment {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   lessonId  String
-  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   content   String
   createdAt DateTime @default(now())
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId], map: "DiscussionComment_lessonId_fkey")
+  @@index([userId], map: "DiscussionComment_userId_fkey")
 }
 
 model TrainingDay {
-  id            Int    @id
+  id            Int                   @id
   title         String
   projectName   String
   description   String?
@@ -343,103 +370,115 @@ model TrainingDay {
 }
 
 model DayRequiredLearning {
-  id       String @id @default(cuid())
+  id       String      @id @default(cuid())
   dayId    Int
-  day      TrainingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
   courseId String?
-  course   Course? @relation(fields: [courseId], references: [id])
   lessonId String?
-  lesson   Lesson? @relation(fields: [lessonId], references: [id])
   label    String
-  required Boolean @default(true)
+  required Boolean     @default(true)
+  course   Course?     @relation(fields: [courseId], references: [id])
+  day      TrainingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  lesson   Lesson?     @relation(fields: [lessonId], references: [id])
+
+  @@index([courseId], map: "DayRequiredLearning_courseId_fkey")
+  @@index([dayId], map: "DayRequiredLearning_dayId_fkey")
+  @@index([lessonId], map: "DayRequiredLearning_lessonId_fkey")
 }
 
 model TrainingPhaseConfig {
-  id                  String        @id @default(cuid())
-  dayId               Int
-  day                 TrainingDay   @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  phase               String
-  productivityTarget  Int
-  qualityTarget       Int
-  qcDeadline          String
+  id                 String      @id @default(cuid())
+  dayId              Int
+  phase              String
+  productivityTarget Int
+  qualityTarget      Int
+  qcDeadline         String
+  day                TrainingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  @@index([dayId], map: "TrainingPhaseConfig_dayId_fkey")
 }
 
 model DailySubmission {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  dayNumber       Int
-  phase           String
-  sopRead         Boolean  @default(false)
-  tasksCompleted  Int      @default(0)
-  productivityPct Float?
-  qualityPct      Float?
-  issues          String?
-  learningComplete Boolean @default(false)
-  submittedAt     DateTime @default(now())
-
-  qaReview      QAReview?
-  trainerReview TrainerReview?
+  id               String         @id @default(cuid())
+  userId           String
+  dayNumber        Int
+  phase            String
+  sopRead          Boolean        @default(false)
+  tasksCompleted   Int            @default(0)
+  productivityPct  Float?
+  qualityPct       Float?
+  issues           String?
+  learningComplete Boolean        @default(false)
+  submittedAt      DateTime       @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qaReview         QAReview?
+  trainerReview    TrainerReview?
 
   @@unique([userId, dayNumber, phase])
 }
 
 model QAReview {
-  id           String       @id @default(cuid())
-  submissionId String       @unique
-  submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  id           String          @id @default(cuid())
+  submissionId String          @unique
   reviewerId   String
-  reviewer     User         @relation("QAReviewer", fields: [reviewerId], references: [id])
   feedback     String?
-  errorCount   Int          @default(0)
+  errorCount   Int             @default(0)
   qualityScore Float?
-  status       String @default("PENDING")
+  status       String          @default("PENDING")
   reviewedAt   DateTime?
+  reviewer     User            @relation("QAReviewer", fields: [reviewerId], references: [id])
+  submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([reviewerId], map: "QAReview_reviewerId_fkey")
 }
 
 model TrainerReview {
-  id           String       @id @default(cuid())
-  submissionId String       @unique
-  submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  id           String          @id @default(cuid())
+  submissionId String          @unique
   reviewerId   String
-  reviewer     User         @relation("TrainerReviewer", fields: [reviewerId], references: [id])
   remarks      String?
-  status       String @default("PENDING")
+  status       String          @default("PENDING")
   reviewedAt   DateTime?
+  reviewer     User            @relation("TrainerReviewer", fields: [reviewerId], references: [id])
+  submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([reviewerId], map: "TrainerReview_reviewerId_fkey")
 }
 
 model Project {
-  id             String   @id @default(cuid())
+  id             String                 @id @default(cuid())
   name           String
   description    String?
   category       String?
-  status         String   @default("ACTIVE")
+  status         String                 @default("ACTIVE")
   startDate      DateTime?
   endDate        DateTime?
-  priority       String   @default("MEDIUM")
+  priority       String                 @default("MEDIUM")
   resources      String?
   documentation  String?
   url            String?
   createdBy      String
-  creator        User     @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  active         Boolean  @default(true)
-
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  active         Boolean                @default(true)
+  creator        User                   @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   assignments    ProjectAssignment[]
   certifications ProjectCertification[]
+
+  @@index([createdBy], map: "Project_createdBy_fkey")
 }
 
 model ProjectAssignment {
   id         String   @id @default(cuid())
   projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId     String
-  user       User     @relation("ProjectAssignments", fields: [userId], references: [id], onDelete: Cascade)
   assignedBy String
-  assigner   User     @relation("AssignmentCreator", fields: [assignedBy], references: [id])
   assignedAt DateTime @default(now())
   status     String   @default("ASSIGNED")
+  assigner   User     @relation("AssignmentCreator", fields: [assignedBy], references: [id])
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation("ProjectAssignments", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([assignedBy], map: "ProjectAssignment_assignedBy_fkey")
+  @@index([userId], map: "ProjectAssignment_userId_fkey")
 }

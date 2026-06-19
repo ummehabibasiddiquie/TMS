@@ -11,6 +11,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:projects": "tsx prisma/seed-projects.ts",
     "db:studio": "prisma studio",
     "prisma:generate:sqlite": "prisma generate --schema prisma/schema.sqlite.prisma",
     "db:migrate:sqlite-to-mysql": "tsx scripts/migrate-sqlite-to-mysql.ts",
