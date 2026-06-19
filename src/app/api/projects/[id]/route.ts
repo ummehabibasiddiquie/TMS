@@ -2,26 +2,6 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-<<<<<<< HEAD
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  const user = await requireSession(["ADMIN", "TRAINER"]);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { name, description, category, status, priority, url, documentation, active } = await req.json();
-  
-  const project = await prisma.project.update({
-    where: { id: params.id },
-    data: {
-      ...(name?.trim() && { name: name.trim() }),
-      ...(description !== undefined && { description: description?.trim() || null }),
-      ...(category !== undefined && { category: category?.trim() || null }),
-      ...(status?.trim() && { status: status.trim() }),
-      ...(priority?.trim() && { priority: priority.trim() }),
-      ...(url !== undefined && { url: url?.trim() || null }),
-      ...(documentation !== undefined && { documentation: documentation?.trim() || null }),
-      ...(active !== undefined && { active }),
-    },
-=======
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -64,7 +44,6 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  // Check if user has access (Admin, Team Lead, or assigned employee)
   const isAssigned = project.assignments.some((a) => a.userId === user.id);
   const isAdmin = user.role === "ADMIN";
   const isTeamLead = user.role === "TRAINER";
@@ -72,6 +51,29 @@ export async function GET(
   if (!isAdmin && !isTeamLead && !isAssigned) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  return NextResponse.json({ project });
+}
+
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const user = await requireSession(["ADMIN", "TRAINER"]);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { name, description, category, status, priority, url, documentation, active } = await req.json();
+  
+  const project = await prisma.project.update({
+    where: { id: params.id },
+    data: {
+      ...(name?.trim() && { name: name.trim() }),
+      ...(description !== undefined && { description: description?.trim() || null }),
+      ...(category !== undefined && { category: category?.trim() || null }),
+      ...(status?.trim() && { status: status.trim() }),
+      ...(priority?.trim() && { priority: priority.trim() }),
+      ...(url !== undefined && { url: url?.trim() || null }),
+      ...(documentation !== undefined && { documentation: documentation?.trim() || null }),
+      ...(active !== undefined && { active }),
+    },
+  });
 
   return NextResponse.json({ project });
 }
@@ -132,13 +134,11 @@ export async function PATCH(
         },
       },
     },
->>>>>>> df682e453fa3568f70421d3b37f82abb7169616c
   });
 
   return NextResponse.json({ project });
 }
 
-<<<<<<< HEAD
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -149,18 +149,4 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   });
 
   return NextResponse.json({ success: true });
-=======
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const user = await requireSession(["ADMIN"]);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  await prisma.project.delete({
-    where: { id: params.id },
-  });
-
-  return NextResponse.json({ ok: true });
->>>>>>> df682e453fa3568f70421d3b37f82abb7169616c
 }
