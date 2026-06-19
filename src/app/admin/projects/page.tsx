@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+<<<<<<< HEAD
 import { Plus, FolderKanban, Users, Award } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -17,10 +18,41 @@ export default async function AdminProjectsPage() {
         select: {
           assignments: true,
           certifications: true,
+=======
+import { getSession } from "@/lib/auth";
+import { AppShell } from "@/components/layout/AppShell";
+import { ProjectManager } from "@/components/projects/ProjectManager";
+import { prisma } from "@/lib/db";
+
+export default async function AdminProjectsPage() {
+  const user = await getSession();
+  if (!user) redirect("/login");
+  if (user.role !== "ADMIN" && user.role !== "TRAINER") redirect("/");
+
+  const projects = await prisma.project.findMany({
+    include: {
+      assignments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      creator: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+>>>>>>> df682e453fa3568f70421d3b37f82abb7169616c
         },
       },
     },
     orderBy: { createdAt: "desc" },
+<<<<<<< HEAD
   }) as any[];
 
   const totalAssignments = projects.reduce((sum: number, p: any) => sum + p._count.assignments, 0);
@@ -62,5 +94,13 @@ export default async function AdminProjectsPage() {
 
       <ProjectManager initialProjects={projects} />
     </div>
+=======
+  });
+
+  return (
+    <AppShell user={user}>
+      <ProjectManager projects={projects} />
+    </AppShell>
+>>>>>>> df682e453fa3568f70421d3b37f82abb7169616c
   );
 }

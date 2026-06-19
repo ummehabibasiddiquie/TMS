@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { title, description, published } = await req.json();
+  const { title, description, published, thumbnail } = await req.json();
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     data: {
       title: title.trim(),
       description: description?.trim() || null,
+      thumbnail: thumbnail || null,
       published: published ?? false,
       createdById: user.id,
       completionRules: {

@@ -27,52 +27,8 @@ export const onboardingSteps = [
   },
 ];
 
-export const projects = [
-  {
-    key: "landscape",
-    initial: "L",
-    name: "Landscape",
-    category: "Data Annotation",
-    description: "Label sidewalks, buildings, flora, parking, and more on aerial imagery.",
-    status: "Training available",
-    detail: "Quiz pending",
-    progress: "3 of 9 modules",
-    available: true,
-  },
-  {
-    key: "email-replies",
-    initial: "E",
-    name: "Email Replies",
-    category: "Communication",
-    description: "Draft and review professional email responses for clients and partners.",
-    status: "Coming soon",
-    detail: "Training documentation not yet available.",
-    progress: "",
-    available: false,
-  },
-  {
-    key: "quality-control",
-    initial: "Q",
-    name: "Quality Control",
-    category: "Review & QC",
-    description: "Review and accept or reject annotated work to maintain quality standards.",
-    status: "Coming soon",
-    detail: "Training documentation not yet available.",
-    progress: "",
-    available: false,
-  },
-  {
-    key: "data-collection",
-    initial: "D",
-    name: "Data Collection",
-    category: "Data Ops",
-    description: "Source, format, and validate structured data assets per project specs.",
-    status: "Coming soon",
-    detail: "Training documentation not yet available.",
-    progress: "",
-    available: false,
-  },
-];
+// Static projects array removed - now using database-driven projects via Prisma
+// See /projects and /admin/projects for dynamic project management
 
 export const landscapeModules = [
   {

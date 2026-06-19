@@ -5,7 +5,7 @@ import { hashPassword } from "@/lib/auth";
 import type { Role } from "@/types";
 
 export async function GET() {
-  const user = await requireSession(["ADMIN"]);
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const users = await prisma.user.findMany({

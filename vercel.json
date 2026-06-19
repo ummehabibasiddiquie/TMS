@@ -2,6 +2,7 @@
   "buildCommand": "prisma generate && next build",
   "devCommand": "next dev",
   "installCommand": "npm install",
+<<<<<<< HEAD
   "framework": "nextjs",
   "env": {
     "DATABASE_URL": {
@@ -9,4 +10,7 @@
       "value": "mysql://USERNAME:PASSWORD@HOST:3306/DATABASE_NAME"
     }
   }
+=======
+  "framework": "nextjs"
+>>>>>>> df682e453fa3568f70421d3b37f82abb7169616c
 }
