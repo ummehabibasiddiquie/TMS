@@ -65,7 +65,7 @@ export default async function ProjectsPage() {
 
     projects = assignments
       .map((a) => a.project)
-      .filter((p) => p !== null);
+      .filter((p) => p !== null && p.active);
   }
 
   return (

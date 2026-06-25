@@ -50,7 +50,6 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  // Check if user has access (Admin, Team Lead, or assigned employee)
   const isAssigned = project.assignments.some((a) => a.userId === user.id);
   const isAdmin = user.role === "ADMIN";
   const isTeamLead = user.role === "TRAINER";
@@ -58,6 +57,29 @@ export async function GET(
   if (!isAdmin && !isTeamLead && !isAssigned) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  return NextResponse.json({ project });
+}
+
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const user = await requireSession(["ADMIN", "TRAINER"]);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { name, description, category, status, priority, url, documentation, active } = await req.json();
+  
+  const project = await prisma.project.update({
+    where: { id: params.id },
+    data: {
+      ...(name?.trim() && { name: name.trim() }),
+      ...(description !== undefined && { description: description?.trim() || null }),
+      ...(category !== undefined && { category: category?.trim() || null }),
+      ...(status?.trim() && { status: status.trim() }),
+      ...(priority?.trim() && { priority: priority.trim() }),
+      ...(url !== undefined && { url: url?.trim() || null }),
+      ...(documentation !== undefined && { documentation: documentation?.trim() || null }),
+      ...(active !== undefined && { active }),
+    },
+  });
 
   return NextResponse.json({ project });
 }
@@ -129,11 +151,8 @@ export async function PATCH(
   return NextResponse.json({ project });
 }
 
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const user = await requireSession(["ADMIN"]);
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {

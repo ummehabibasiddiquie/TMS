@@ -56,15 +56,13 @@ export default async function CertificationsPage() {
                     </p>
                   </div>
                 </div>
-                {certified && (
-                  <button className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200">
-                    <Download className="h-4 w-4" />
-                    Download Certificate PDF
-                  </button>
-                )}
+                <button className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200">
+                  <Download className="h-4 w-4" />
+                  Download Certificate PDF
+                </button>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
       </div>
     </AppShell>

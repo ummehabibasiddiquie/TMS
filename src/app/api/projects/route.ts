@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export async function GET(req: Request) {
-  const user = await requireSession();
+export async function GET() {
+  const user = await requireSession(["ADMIN", "TEAM_LEAD", "EMPLOYEE"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -108,19 +108,13 @@ export async function GET(req: Request) {
         },
       },
     },
+    orderBy: { createdAt: "desc" },
   });
-
-  const projects = assignments.map((a: any) => ({
-    ...a.project,
-    assignmentStatus: a.status,
-    assignedAt: a.assignedAt,
-  }));
-
   return NextResponse.json({ projects });
 }
 
 export async function POST(req: Request) {
-  const user = await requireSession(["ADMIN"]);
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const {
@@ -138,7 +132,7 @@ export async function POST(req: Request) {
   } = await req.json();
 
   if (!name?.trim()) {
-    return NextResponse.json({ error: "Project name is required" }, { status: 400 });
+    return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
   const project = await prisma.project.create({
@@ -153,7 +147,7 @@ export async function POST(req: Request) {
       resources: resources?.trim() || null,
       documentation: documentation?.trim() || null,
       url: url?.trim() || null,
-      active: active ?? true,
+      documentation: documentation?.trim() || null,
       createdBy: user.id,
     },
     include: {
