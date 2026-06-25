@@ -8,7 +8,6 @@ export default async function CertificationsPage() {
   const user = await getSession();
   if (!user) redirect("/login");
 
-  // Fetch projects with their certifications
   const projects = await prisma.project.findMany({
     where: { active: true },
     include: {
@@ -62,7 +61,7 @@ export default async function CertificationsPage() {
                 </button>
               </div>
             ))
-          )}
+          })}
         </div>
       </div>
     </AppShell>
