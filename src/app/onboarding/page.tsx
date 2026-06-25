@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { CheckCircle2, Circle, Lock, Clock, Users, BookOpen } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
-import DynamicOnboardingFlow from "@/components/onboarding/DynamicOnboardingFlow";
+import { DynamicOnboardingFlow } from "@/components/onboarding/DynamicOnboardingFlow";
 import { cn } from "@/lib/utils";
 
 export default async function OnboardingPage() {

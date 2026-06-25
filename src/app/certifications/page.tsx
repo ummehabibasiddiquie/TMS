@@ -1,28 +1,79 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Award, Download } from "lucide-react";
-import { getSession } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
-import { prisma } from "@/lib/db";
+import type { Role } from "@/types";
 
-export default async function CertificationsPage() {
-  const user = await getSession();
-  if (!user) redirect("/login");
+type Project = {
+  id: string;
+  name: string;
+  categoryRel: {
+    id: string;
+    name: string;
+  } | null;
+  certifications: {
+    id: string;
+    passed: boolean;
+    certifiedAt: Date;
+    score: number;
+  }[];
+};
 
-  const projects = await prisma.project.findMany({
-    where: { active: true },
-    include: {
-      categoryRel: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      certifications: {
-        where: { userId: user.id },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+export default function CertificationsPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<{ name: string; role: Role; email: string } | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUser();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchUser = async () => {
+    try {
+      const res = await fetch("/api/users/me");
+      const data = await res.json();
+      if (res.ok) {
+        setUser(data.user);
+        fetchProjects();
+      } else {
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      router.push("/login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch("/api/certifications");
+      const data = await res.json();
+      if (res.ok) {
+        setProjects(data.projects);
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppShell user={user || { name: "", email: "", role: "TRAINEE" }}>
+        <div className="flex items-center justify-center min-h-screen">
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <AppShell user={user}>
@@ -60,7 +111,7 @@ export default async function CertificationsPage() {
                   Download Certificate PDF
                 </button>
               </div>
-            ))
+            );
           })}
         </div>
       </div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+export async function GET(req: Request) {
   const user = await requireSession(["ADMIN", "TEAM_LEAD", "EMPLOYEE"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -108,8 +108,14 @@ export async function GET() {
         },
       },
     },
-    orderBy: { createdAt: "desc" },
   });
+
+  const projects = assignments.map((a: any) => ({
+    ...a.project,
+    assignmentStatus: a.status,
+    assignedAt: a.assignedAt,
+  }));
+
   return NextResponse.json({ projects });
 }
 
@@ -147,7 +153,6 @@ export async function POST(req: Request) {
       resources: resources?.trim() || null,
       documentation: documentation?.trim() || null,
       url: url?.trim() || null,
-      documentation: documentation?.trim() || null,
       createdBy: user.id,
     },
     include: {

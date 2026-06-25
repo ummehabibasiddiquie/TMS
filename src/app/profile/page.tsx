@@ -24,7 +24,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchUser();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchUser = async () => {
     try {

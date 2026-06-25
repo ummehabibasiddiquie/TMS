@@ -73,7 +73,7 @@ export async function initializeUserOnboarding(userId: string, templateId?: stri
 
   // Initialize progress for all steps
   await prisma.userOnboardingProgress.createMany({
-    data: template.steps.map((step, index) => ({
+    data: template.steps.map((step: any, index: number) => ({
       userId,
       stepId: step.id,
       status: index === 0 ? "ACTIVE" : "LOCKED"
@@ -111,7 +111,7 @@ export async function getUserDynamicOnboarding(userId: string) {
   });
 
   // Build dynamic steps with computed status
-  const dynamicSteps: DynamicOnboardingStep[] = template.steps.map((step, index) => {
+  const dynamicSteps: DynamicOnboardingStep[] = template.steps.map((step: any, index: number) => {
     const progress = stepProgress.find(p => p.stepId === step.id);
     let status: OnboardingStepStatus = "LOCKED";
 
@@ -375,7 +375,7 @@ export async function submitQuizAttempt(
 
   // Calculate score
   let correct = 0;
-  quiz.questions.forEach((question) => {
+  quiz.questions.forEach((question: any) => {
     const userAnswer = answers[question.id];
     const correctAnswer = JSON.parse(question.correct);
     if (JSON.stringify(userAnswer) === JSON.stringify(correctAnswer)) {

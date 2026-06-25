@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
             Reset your password securely
           </h1>
           <p className="mt-4 max-w-md text-slate-400">
-            Enter your email address and we'll send you a secure link to reset your password. The link will expire in 15 minutes.
+            Enter your email address and we&apos;ll send you a secure link to reset your password. The link will expire in 15 minutes.
           </p>
         </div>
       </div>

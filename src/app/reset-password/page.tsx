@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle, Lock } from "lucide-react";
 import Link from "next/link";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -135,7 +135,7 @@ export default function ResetPasswordPage() {
             Set your new password
           </h1>
           <p className="mt-4 max-w-md text-slate-400">
-            Enter your new password below. Make sure it's at least 8 characters long and different from your previous password.
+            Enter your new password below. Make sure it&apos;s at least 8 characters long and different from your previous password.
           </p>
         </div>
       </div>
@@ -227,5 +227,13 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-slate-400">Loading...</p></div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
