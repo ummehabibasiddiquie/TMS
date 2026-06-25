@@ -9,7 +9,11 @@ type Project = {
   id: string;
   name: string;
   description: string | null;
-  category: string | null;
+  categoryId: string | null;
+  categoryRel: {
+    id: string;
+    name: string;
+  } | null;
   status: string;
   startDate: string | null;
   endDate: string | null;
@@ -166,7 +170,7 @@ export function ProjectDetails({ project, user }: { project: Project; user: User
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-slate-400">Category</p>
-                  <p className="mt-1 text-white">{project.category || "Uncategorized"}</p>
+                  <p className="mt-1 text-white">{project.categoryRel?.name || "Uncategorized"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Status</p>

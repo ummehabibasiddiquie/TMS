@@ -2,11 +2,28 @@ import { redirect } from "next/navigation";
 import { Award, Download } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
-import { projects } from "@/lib/onboarding-data";
+import { prisma } from "@/lib/db";
 
 export default async function CertificationsPage() {
   const user = await getSession();
   if (!user) redirect("/login");
+
+  // Fetch projects with their certifications
+  const projects = await prisma.project.findMany({
+    where: { active: true },
+    include: {
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      certifications: {
+        where: { userId: user.id },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
 
   return (
     <AppShell user={user}>
@@ -20,19 +37,22 @@ export default async function CertificationsPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {projects.map((project, index) => {
-            const certified = index === 0;
+          {projects.map((project) => {
+            const certified = project.certifications.length > 0 && project.certifications[0].passed;
+            const certification = project.certifications[0];
             return (
-              <div key={project.key} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+              <div key={project.id} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
                 <div className="flex gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">
-                    {certified ? <Award className="h-6 w-6" /> : project.initial}
+                    {certified ? <Award className="h-6 w-6" /> : project.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <h2 className="font-semibold text-white">{project.name}</h2>
-                    <p className="text-sm text-slate-500">{project.category}</p>
+                    <p className="text-sm text-slate-500">{project.categoryRel?.name || "Uncategorized"}</p>
                     <p className="mt-3 text-sm text-slate-300">
-                      {certified ? "Certified - issued 18 May 2025 - score 5 / 5" : "Coming Soon - training not yet available"}
+                      {certified 
+                        ? `Certified - issued ${new Date(certification.certifiedAt).toLocaleDateString()} - score ${certification.score.toFixed(1)} / 5` 
+                        : "Coming Soon - training not yet available"}
                     </p>
                   </div>
                 </div>

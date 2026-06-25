@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { AppShell } from "@/components/layout/AppShell";
 import { ProjectManager } from "@/components/projects/ProjectManager";
 import { prisma } from "@/lib/db";
 
@@ -11,6 +10,12 @@ export default async function AdminProjectsPage() {
 
   const projects = await prisma.project.findMany({
     include: {
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       assignments: {
         include: {
           user: {
@@ -31,11 +36,7 @@ export default async function AdminProjectsPage() {
       },
     },
     orderBy: { createdAt: "desc" },
-  });
+  }) as any;
 
-  return (
-    <AppShell user={user}>
-      <ProjectManager projects={projects} />
-    </AppShell>
-  );
+  return <ProjectManager projects={projects} user={user} />;
 }

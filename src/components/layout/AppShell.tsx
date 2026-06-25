@@ -61,6 +61,8 @@ const navItems: { section: string; items: NavItem[] }[] = [
     section: "Admin",
     items: [
       { href: "/admin/users", label: "Manage Users", icon: Users, roles: ["ADMIN"] },
+      { href: "/admin/projects", label: "Manage Projects", icon: FolderKanban, roles: ["ADMIN", "TRAINER"] },
+      { href: "/admin/project-categories", label: "Project Categories", icon: FolderKanban, roles: ["ADMIN"] },
       { href: "/admin/progress", label: "Progress Reports", icon: BarChart3, roles: ["ADMIN"] },
       { href: "/admin/content", label: "Content Studio", icon: BookOpen, roles: ["ADMIN"] },
     ],
@@ -155,7 +157,7 @@ export function AppShell({
         </div>
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-slate-950/70 lg:hidden" onClick={() => setOpen(false)} />}
-      <main className="min-h-screen p-4 pt-16 lg:ml-72 lg:p-8">{children}</main>
+      <main className="min-h-screen pt-16 lg:ml-72">{children}</main>
     </div>
   );
 }

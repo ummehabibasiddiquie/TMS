@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, GraduationCap } from "lucide-react";
+import Link from "next/link";
 import type { Role } from "@/types";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 const ROLE_HOME: Record<Role, string> = {
   TRAINEE: "/",
@@ -90,13 +92,13 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="text-sm text-slate-400">Password</label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-3 focus:border-blue-500 focus:outline-none"
+              onChange={setPassword}
               placeholder="Enter your password"
               required
+              disabled={loading}
+              className="mt-1"
             />
           </div>
           <button
@@ -107,7 +109,12 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign in"}
             {!loading && <ArrowRight className="h-4 w-4" />}
           </button>
-          <p className="text-center text-xs text-slate-500">Forgot your password? Contact your Admin.</p>
+          <p className="text-center text-xs text-slate-500">
+            Forgot your password?{" "}
+            <Link href="/forgot-password" className="text-blue-400 hover:text-blue-300">
+              Reset it here
+            </Link>
+          </p>
         </form>
       </div>
     </div>

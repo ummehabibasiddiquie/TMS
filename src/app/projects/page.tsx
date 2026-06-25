@@ -14,8 +14,13 @@ export default async function ProjectsPage() {
 
   if (user.role === "ADMIN" || user.role === "TRAINER") {
     projects = await prisma.project.findMany({
-      where: { active: true },
       include: {
+        categoryRel: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         assignments: {
           include: {
             user: {
@@ -35,8 +40,13 @@ export default async function ProjectsPage() {
       where: { userId: user.id },
       include: {
         project: {
-          where: { active: true },
           include: {
+            categoryRel: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             assignments: {
               include: {
                 user: {
@@ -105,9 +115,9 @@ export default async function ProjectsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold text-white">{project.name}</h2>
-                      {project.category && (
+                      {project.categoryRel && (
                         <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
-                          {project.category}
+                          {project.categoryRel.name}
                         </span>
                       )}
                     </div>
@@ -116,8 +126,22 @@ export default async function ProjectsPage() {
                       <span
                         className={cn(
                           "rounded-full px-3 py-1",
+                          project.active
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-red-500/15 text-red-300"
+                        )}
+                      >
+                        {project.active ? "Active" : "Inactive"}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-full px-3 py-1",
                           project.status === "ACTIVE"
                             ? "bg-emerald-500/15 text-emerald-300"
+                            : project.status === "COMPLETED"
+                            ? "bg-blue-500/15 text-blue-300"
+                            : project.status === "ON_HOLD"
+                            ? "bg-yellow-500/15 text-yellow-300"
                             : "bg-slate-800 text-slate-300"
                         )}
                       >

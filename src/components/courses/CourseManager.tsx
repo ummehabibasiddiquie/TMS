@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, X, FolderOpen, Image as ImageIcon, Upload } from "lucide-react";
+import { ActionButton } from "@/components/ui/ActionButton";
 
 type Course = {
   id: string;
@@ -162,20 +163,18 @@ export function CourseManager({
                 >
                   {c.published ? "Published" : "Draft"}
                 </span>
-                <button
+                <ActionButton
+                  icon={Pencil}
+                  label="Edit course"
                   onClick={() => openEdit(c)}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
-                  title="Edit"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
+                  variant="edit"
+                />
+                <ActionButton
+                  icon={Trash2}
+                  label="Delete course"
                   onClick={() => remove(c.id, c.title)}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-red-900/30 hover:text-red-300"
-                  title="Delete"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                  variant="delete"
+                />
               </div>
             </div>
           </div>

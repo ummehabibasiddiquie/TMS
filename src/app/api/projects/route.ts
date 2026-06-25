@@ -16,6 +16,12 @@ export async function GET(req: Request) {
       include: {
         project: {
           include: {
+            categoryRel: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             assignments: {
               include: {
                 user: {
@@ -45,6 +51,12 @@ export async function GET(req: Request) {
   if (user.role === "ADMIN" || user.role === "TRAINER") {
     const projects = await prisma.project.findMany({
       include: {
+        categoryRel: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         assignments: {
           include: {
             user: {
@@ -76,6 +88,12 @@ export async function GET(req: Request) {
     include: {
       project: {
         include: {
+          categoryRel: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           assignments: {
             include: {
               user: {
@@ -108,7 +126,7 @@ export async function POST(req: Request) {
   const {
     name,
     description,
-    category,
+    categoryId,
     status,
     startDate,
     endDate,
@@ -127,7 +145,7 @@ export async function POST(req: Request) {
     data: {
       name: name.trim(),
       description: description?.trim() || null,
-      category: category?.trim() || null,
+      categoryId: categoryId || null,
       status: status || "ACTIVE",
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
@@ -139,6 +157,12 @@ export async function POST(req: Request) {
       createdBy: user.id,
     },
     include: {
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       assignments: {
         include: {
           user: {

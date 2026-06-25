@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { landscapeQuiz } from "@/lib/onboarding-data";
 import { recordCertification } from "@/lib/onboarding";
+import { prisma } from "@/lib/db";
 
 export async function POST(req: Request) {
   const user = await requireSession(["TRAINEE", "ADMIN", "TRAINER"]);
@@ -21,7 +22,19 @@ export async function POST(req: Request) {
   const score = (correct / landscapeQuiz.length) * 100;
   const passed = score >= 80;
 
-  await recordCertification(user.id, projectKey, score, passed);
+  // Find project by key (name matching projectKey)
+  const project = await prisma.project.findFirst({
+    where: { 
+      name: projectKey,
+      active: true 
+    },
+  });
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  await recordCertification(user.id, project.id, score, passed);
 
   return NextResponse.json({
     score,

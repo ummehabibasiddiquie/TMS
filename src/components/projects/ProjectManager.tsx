@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, X, Users, Calendar, Link as LinkIcon, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Users, Calendar, Link as LinkIcon, FileText, FolderKanban } from "lucide-react";
+import { ActionButton } from "@/components/ui/ActionButton";
 
 type Project = {
   id: string;
   name: string;
   description: string | null;
-  category: string | null;
+  categoryId: string | null;
+  categoryRel: {
+    id: string;
+    name: string;
+  } | null;
   status: string;
   startDate: string | null;
   endDate: string | null;
@@ -33,15 +38,28 @@ type Project = {
   };
 };
 
-export function ProjectManager({ projects: initial }: { projects: Project[] }) {
+type Category = {
+  id: string;
+  name: string;
+};
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export function ProjectManager({ projects: initial, user }: { projects: Project[]; user: User }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initial);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
-    category: "",
+    categoryId: "",
     status: "ACTIVE",
     startDate: "",
     endDate: "",
@@ -53,12 +71,49 @@ export function ProjectManager({ projects: initial }: { projects: Project[] }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
+  const [statusFilter, setStatusFilter] = useState("All Status");
+
+  // Fetch categories on mount
+  useEffect(() => {
+    fetch("/api/project-categories?dropdown=true")
+      .then((res) => res.json())
+      .then((data) => setCategories(data))
+      .catch((err) => console.error("Failed to fetch categories:", err));
+  }, []);
+
+  const filteredProjects = projects.filter((project) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesCategory =
+      categoryFilter === "All Categories" ||
+      categoryFilter === (project.categoryRel?.name || "Uncategorized");
+
+    const matchesStatus =
+      statusFilter === "All Status" ||
+      (statusFilter === "Active" && project.active) ||
+      (statusFilter === "Inactive" && !project.active) ||
+      (statusFilter === "Completed" && project.status === "COMPLETED") ||
+      (statusFilter === "On Hold" && project.status === "ON_HOLD");
+
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  function clearFilters() {
+    setSearchQuery("");
+    setCategoryFilter("All Categories");
+    setStatusFilter("All Status");
+  }
 
   function openCreate() {
     setForm({
       name: "",
       description: "",
-      category: "",
+      categoryId: "",
       status: "ACTIVE",
       startDate: "",
       endDate: "",
@@ -77,7 +132,7 @@ export function ProjectManager({ projects: initial }: { projects: Project[] }) {
     setForm({
       name: p.name,
       description: p.description || "",
-      category: p.category || "",
+      categoryId: p.categoryId || "",
       status: p.status,
       startDate: p.startDate ? new Date(p.startDate).toISOString().split("T")[0] : "",
       endDate: p.endDate ? new Date(p.endDate).toISOString().split("T")[0] : "",
@@ -101,117 +156,194 @@ export function ProjectManager({ projects: initial }: { projects: Project[] }) {
     setError("");
     const url = modal === "edit" && editing ? `/api/projects/${editing.id}` : "/api/projects";
     const method = modal === "edit" ? "PATCH" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error || "Failed to save");
-      return;
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) {
+        setError(data.error || "Failed to save");
+        return;
+      }
+      if (modal === "create") {
+        setProjects([{ ...data.project, assignments: [], creator: { id: user.id, name: user.name, email: user.email } }, ...projects]);
+      } else if (modal === "edit" && editing) {
+        setProjects(projects.map((p) => p.id === editing.id ? { ...data.project, assignments: p.assignments, creator: p.creator } : p));
+      }
+      setModal(null);
+      router.refresh();
+    } catch (err) {
+      setLoading(false);
+      setError("Failed to save project. Please try again.");
+      console.error("Save error:", err);
     }
-    setModal(null);
-    router.refresh();
   }
 
   async function deleteProject(id: string) {
-    if (!confirm("Are you sure you want to delete this project?")) return;
+    const project = projects.find(p => p.id === id);
+    const projectName = project?.name || "this project";
+    const assignmentCount = project?.assignments.length || 0;
+    
+    const confirmMessage = assignmentCount > 0 
+      ? `Are you sure you want to delete "${projectName}"?\n\nThis project has ${assignmentCount} assigned employee(s). Deleting it will remove all assignments and certifications associated with this project.`
+      : `Are you sure you want to delete "${projectName}"?`;
+    
+    if (!confirm(confirmMessage)) return;
+    
     setLoading(true);
-    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
-    setLoading(false);
-    if (!res.ok) {
-      alert("Failed to delete project");
-      return;
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) {
+        alert(`Error: ${data.error || "Failed to delete project"}`);
+        return;
+      }
+      // Show success message
+      alert(data.message || "Project deleted successfully");
+      setProjects(projects.filter((p) => p.id !== id));
+      router.refresh();
+    } catch (err) {
+      setLoading(false);
+      alert("Failed to delete project. Please try again.");
+      console.error("Delete error:", err);
     }
-    router.refresh();
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Project Management</p>
-          <h1 className="mt-3 text-3xl font-bold text-white">Manage Projects</h1>
-          <p className="mt-2 text-slate-400">Create, edit, and assign projects to team members.</p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-medium hover:bg-blue-500"
-        >
-          <Plus className="h-4 w-4" />
-          Add Project
-        </button>
+    <div className="w-full space-y-8">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Manage Projects</p>
+        <h1 className="mt-3 text-3xl font-bold text-white">Create, edit, and assign projects</h1>
+        <p className="mt-2 text-slate-400">Manage project assignments and track team progress.</p>
       </div>
 
-      <div className="space-y-4">
-        {projects.length === 0 ? (
-          <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-            <p className="text-slate-400">No projects found. Create your first project to get started.</p>
+      <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row">
+          <div className="flex flex-1 gap-3">
+            <input
+              placeholder="Search projects..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 flex-1"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+            >
+              <option>All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+            >
+              <option>All Status</option>
+              <option>Active</option>
+              <option>Inactive</option>
+              <option>Completed</option>
+              <option>On Hold</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={clearFilters}
+              className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+            >
+              Clear Filters
+            </button>
+            <button
+              onClick={openCreate}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            >
+              + Add Project
+            </button>
+          </div>
+        </div>
+        {filteredProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <FolderKanban className="h-12 w-12 text-slate-600 mb-4" />
+            <p className="text-slate-400">No projects found</p>
+            <p className="text-sm text-slate-500 mt-1">Try adjusting your filters or create your first project</p>
           </div>
         ) : (
-          projects.map((project) => (
-            <div key={project.id} className="glass-panel p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-xl font-semibold">{project.name}</h3>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs ${
-                        project.active
-                          ? "bg-emerald-500/15 text-emerald-300"
-                          : "bg-slate-800 text-slate-400"
-                      }`}
-                    >
-                      {project.active ? "Active" : "Inactive"}
-                    </span>
-                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                      {project.category || "Uncategorized"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-400">{project.description || "No description"}</p>
-                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-500">
-                    <div className="flex items-center gap-1">
-                      <Users className="h-4 w-4" />
-                      <span>{project.assignments.length} assigned</span>
-                    </div>
-                    {project.startDate && (
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>Start: {new Date(project.startDate).toLocaleDateString()}</span>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="text-slate-500">
+                <tr className="border-b border-slate-800">
+                  {["Project", "Category", "Active", "Status", "Priority", "Assigned", ""].map((header) => (
+                    <th key={header} className="py-3 font-medium">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProjects.map((project) => (
+                  <tr key={project.id} className="border-b border-slate-800/70 text-slate-300">
+                    <td className="py-3 font-medium text-white">{project.name}</td>
+                    <td className="py-3">{project.categoryRel?.name || "Uncategorized"}</td>
+                    <td className="py-3">
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium border ${
+                          project.active
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : "bg-slate-800 text-slate-400 border-slate-700"
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
+                          project.active ? "bg-emerald-400" : "bg-slate-400"
+                        }`} />
+                        {project.active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium border ${
+                          project.status === "ACTIVE"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : project.status === "COMPLETED"
+                            ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                            : project.status === "ON_HOLD"
+                            ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                            : "bg-slate-800 text-slate-400 border-slate-700"
+                        }`}
+                      >
+                        {project.status}
+                      </span>
+                    </td>
+                    <td className="py-3">{project.priority}</td>
+                    <td className="py-3">{project.assignments.length}</td>
+                    <td className="py-3">
+                      <div className="flex gap-1">
+                        <ActionButton
+                          icon={Pencil}
+                          label="Edit project"
+                          onClick={() => openEdit(project)}
+                          variant="edit"
+                        />
+                        <ActionButton
+                          icon={Trash2}
+                          label="Delete project"
+                          onClick={() => deleteProject(project.id)}
+                          variant="delete"
+                        />
                       </div>
-                    )}
-                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs">
-                      Priority: {project.priority}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => router.push(`/projects/${project.id}`)}
-                    className="flex items-center gap-1 rounded-lg bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Details
-                  </button>
-                  <button
-                    onClick={() => openEdit(project)}
-                    className="rounded-lg bg-slate-700 p-2 hover:bg-slate-600"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => deleteProject(project.id)}
-                    className="rounded-lg bg-red-500/20 p-2 text-red-400 hover:bg-red-500/30"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+        <p className="mt-4 text-sm text-slate-500">Showing {filteredProjects.length} of {projects.length} projects</p>
       </div>
 
       {modal && (
@@ -247,11 +379,18 @@ export function ProjectManager({ projects: initial }: { projects: Project[] }) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-slate-400">Category</label>
-                  <input
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  <select
+                    value={form.categoryId}
+                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
-                  />
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-sm text-slate-400">Status</label>

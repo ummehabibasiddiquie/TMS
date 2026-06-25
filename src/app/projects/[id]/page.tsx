@@ -15,6 +15,12 @@ export default async function ProjectDetailsPage({
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       assignments: {
         include: {
           user: {
@@ -63,7 +69,7 @@ export default async function ProjectDetailsPage({
       <AppShell user={user}>
         <div className="mx-auto max-w-6xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white">Access Denied</h1>
-          <p className="mt-2 text-slate-400">You don't have permission to view this project.</p>
+          <p className="mt-2 text-slate-400">You don&apos;t have permission to view this project.</p>
         </div>
       </AppShell>
     );
@@ -71,7 +77,7 @@ export default async function ProjectDetailsPage({
 
   return (
     <AppShell user={user}>
-      <ProjectDetails project={project} user={user} />
+      <ProjectDetails project={project as any} user={user} />
     </AppShell>
   );
 }

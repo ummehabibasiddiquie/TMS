@@ -11,6 +11,7 @@ export type SessionUser = {
   name: string;
   role: Role;
   employeeId: string | null;
+  sessionId?: string;
 };
 
 export async function hashPassword(password: string) {
@@ -46,7 +47,7 @@ export async function getSession(): Promise<SessionUser | null> {
     where: { id: userId },
     select: { id: true, email: true, name: true, role: true, employeeId: true },
   });
-  return user ? { ...user, role: user.role as Role } : null;
+  return user ? { ...user, role: user.role as Role, sessionId: userId } : null;
 }
 
 export async function requireSession(roles?: Role[]) {

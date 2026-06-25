@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X, Save } from "lucide-react";
 import type { Role } from "@/types";
 import { ROLE_LABELS, ROLES } from "@/lib/roles";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 type FormState = {
   email: string;
@@ -133,13 +134,13 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
 
           <div>
             <label className="block text-sm text-slate-400">Password *</label>
-            <input
-              type="password"
+            <PasswordInput
               value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+              onChange={(value) => setForm({ ...form, password: value })}
+              disabled={loading}
               placeholder="Min 6 characters"
               required
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -148,7 +149,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
             <select
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+              className="mt-1 w-ful rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
               required
             >
               {ROLES.map((role) => (
@@ -171,7 +172,7 @@ export function AddUserModal({ isOpen, onClose }: AddUserModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Date of Joining</label>
+            <label className="block text-sm telxt-slate-400">Date of Joining</label>
             <input
               type="date"
               value={form.dateOfJoining}

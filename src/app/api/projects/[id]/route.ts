@@ -12,6 +12,12 @@ export async function GET(
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       assignments: {
         include: {
           user: {
@@ -66,7 +72,7 @@ export async function PATCH(
   const {
     name,
     description,
-    category,
+    categoryId,
     status,
     startDate,
     endDate,
@@ -82,7 +88,7 @@ export async function PATCH(
     data: {
       ...(name !== undefined && { name: name.trim() }),
       ...(description !== undefined && { description: description?.trim() || null }),
-      ...(category !== undefined && { category: category?.trim() || null }),
+      ...(categoryId !== undefined && { categoryId: categoryId || null }),
       ...(status !== undefined && { status }),
       ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
       ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
@@ -93,6 +99,12 @@ export async function PATCH(
       ...(active !== undefined && { active }),
     },
     include: {
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       assignments: {
         include: {
           user: {
@@ -124,9 +136,37 @@ export async function DELETE(
   const user = await requireSession(["ADMIN"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await prisma.project.delete({
-    where: { id: params.id },
-  });
+  try {
+    // Check if project exists
+    const project = await prisma.project.findUnique({
+      where: { id: params.id },
+      include: {
+        _count: {
+          select: {
+            assignments: true,
+            certifications: true,
+          },
+        },
+      },
+    });
 
-  return NextResponse.json({ ok: true });
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    // Delete the project (cascade will handle related records)
+    await prisma.project.delete({
+      where: { id: params.id },
+    });
+
+    return NextResponse.json({ 
+      ok: true, 
+      message: `Project "${project.name}" deleted successfully. Removed ${project._count.assignments} assignments and ${project._count.certifications} certifications.`
+    });
+  } catch (error) {
+    console.error("Delete project error:", error);
+    return NextResponse.json({ 
+      error: "Failed to delete project. It may be referenced by other records." 
+    }, { status: 500 });
+  }
 }

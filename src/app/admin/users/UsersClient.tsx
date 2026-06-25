@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { formatRole } from "@/lib/roles";
 import { AddUserModal } from "@/components/admin/AddUserModal";
+import { EditUserModal } from "@/components/admin/EditUserModal";
+import { Pencil, Trash2 } from "lucide-react";
+import { ActionButton } from "@/components/ui/ActionButton";
 
 type User = {
   id: string;
@@ -19,10 +22,58 @@ interface UsersClientProps {
 
 export function UsersClient({ users }: UsersClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userList, setUserList] = useState(users);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("All Roles");
+  const [departmentFilter, setDepartmentFilter] = useState("All Departments");
+
+  const filteredUsers = userList.filter((user) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesRole =
+      roleFilter === "All Roles" ||
+      (roleFilter === "Admin" && user.role === "ADMIN") ||
+      (roleFilter === "Team Lead" && user.role === "TRAINER") ||
+      (roleFilter === "Employee" && user.role === "TRAINEE");
+
+    const userDepartment = user.employeeId?.startsWith("TRN") ? "Email Ops" : "Annotation";
+    const matchesDepartment =
+      departmentFilter === "All Departments" ||
+      departmentFilter === userDepartment;
+
+    return matchesSearch && matchesRole && matchesDepartment;
+  });
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to delete user");
+        return;
+      }
+
+      setUserList(userList.filter((u) => u.id !== id));
+    } catch (err) {
+      alert("Failed to delete user. Please try again.");
+      console.error("Delete error:", err);
+    }
+  };
 
   return (
     <>
-      <div className="mx-auto max-w-6xl space-y-8">
+      <div className="w-full space-y-8">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Manage Users</p>
           <h1 className="mt-3 text-3xl font-bold text-white">Create, edit, and deactivate accounts</h1>
@@ -31,25 +82,37 @@ export function UsersClient({ users }: UsersClientProps) {
 
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
           <div className="mb-4 flex flex-col gap-3 md:flex-row">
-            <input
-              placeholder="Search by name or email..."
-              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 md:w-72"
-            />
-            <select className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200">
-              <option>All Roles</option>
-              <option>Employee</option>
-              <option>Team Lead</option>
-              <option>Admin</option>
-            </select>
-            <select className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200">
-              <option>All Departments</option>
-              <option>Annotation</option>
-              <option>Email Ops</option>
-              <option>Operations</option>
-            </select>
+            <div className="flex flex-1 gap-3">
+              <input
+                placeholder="Search by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 flex-1"
+              />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+              >
+                <option>All Roles</option>
+                <option>Employee</option>
+                <option>Team Lead</option>
+                <option>Admin</option>
+              </select>
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+              >
+                <option>All Departments</option>
+                <option>Annotation</option>
+                <option>Email Ops</option>
+                <option>Operations</option>
+              </select>
+            </div>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white md:ml-auto hover:bg-blue-500"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
             >
               + Add User
             </button>
@@ -64,7 +127,7 @@ export function UsersClient({ users }: UsersClientProps) {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr key={user.id} className="border-b border-slate-800/70 text-slate-300">
                     <td className="py-3 font-medium text-white">{user.name}</td>
                     <td className="py-3">{user.email}</td>
@@ -76,17 +139,45 @@ export function UsersClient({ users }: UsersClientProps) {
                         : "-"}
                     </td>
                     <td className="py-3">Active</td>
-                    <td className="py-3 text-blue-300">Edit</td>
+                    <td className="py-3">
+                      <div className="flex gap-1">
+                        <ActionButton
+                          icon={Pencil}
+                          label="Edit user"
+                          onClick={() => setEditingUser(user)}
+                          variant="edit"
+                        />
+                        <ActionButton
+                          icon={Trash2}
+                          label="Delete user"
+                          onClick={() => handleDelete(user.id)}
+                          variant="delete"
+                        />
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-sm text-slate-500">Showing {users.length} of {users.length} users</p>
+          <p className="mt-4 text-sm text-slate-500">Showing {filteredUsers.length} of {userList.length} users</p>
         </div>
       </div>
 
       <AddUserModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      {editingUser && (
+        <EditUserModal
+          isOpen={!!editingUser}
+          onClose={() => setEditingUser(null)}
+          user={editingUser}
+          onSuccess={(updatedUser) => {
+            setUserList(userList.map((u) => u.id === updatedUser.id ? {
+              ...updatedUser,
+              dateOfJoining: updatedUser.dateOfJoining ? new Date(updatedUser.dateOfJoining) : null
+            } : u));
+          }}
+        />
+      )}
     </>
   );
 }

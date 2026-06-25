@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HelpCircle, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { ActionButton } from "@/components/ui/ActionButton";
 
 type Question = {
   id: string;
@@ -237,13 +238,19 @@ export function QuizQuestionManager({ quizzes }: { quizzes: Quiz[] }) {
                   </p>
                   <p className="mt-1 font-medium text-white">{question.question}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => startEdit(question)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button onClick={() => remove(question)} className="rounded-lg p-2 text-slate-400 hover:bg-rose-950 hover:text-rose-300">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div className="flex gap-1">
+                  <ActionButton
+                    icon={Pencil}
+                    label="Edit question"
+                    onClick={() => startEdit(question)}
+                    variant="edit"
+                  />
+                  <ActionButton
+                    icon={Trash2}
+                    label="Delete question"
+                    onClick={() => remove(question)}
+                    variant="delete"
+                  />
                 </div>
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
