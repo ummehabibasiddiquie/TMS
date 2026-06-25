@@ -36,10 +36,12 @@ model User {
   trainerReviews     TrainerReview[]          @relation("TrainerReviewer")
   achievements       UserAchievement[]
   onboardingProgress UserOnboardingProgress[]
-  certifications     ProjectCertification[]
-  createdProjects    Project[]          @relation("ProjectCreator")
-  projectAssignments ProjectAssignment[] @relation("ProjectAssignments")
-  createdAssignments ProjectAssignment[] @relation("AssignmentCreator")
+  teamMemberships    TeamEmployee[]
+  courseProgress     CourseEmployeeProgress[]
+  createdCategories  ProjectCategory[]  @relation("CategoryCreator")
+  approvedSteps     UserOnboardingProgress[] @relation("StepApprover")
+  approvedCourses   CourseEmployeeProgress[] @relation("CourseApprover")
+  approvedQuizzes   QuizAttempt[] @relation("QuizApprover")
 }
 
 model OnboardingStep {
@@ -52,6 +54,8 @@ model OnboardingStep {
   type        String
   description String
   projectKey  String   @default("landscape")
+  templateId  String?
+  template    OnboardingTemplate? @relation(fields: [templateId], references: [id])
 
   progress UserOnboardingProgress[]
 }
@@ -62,11 +66,13 @@ model UserOnboardingProgress {
   stepId      String
   status      String         @default("LOCKED")
   completedAt DateTime?
+  approvedAt  DateTime?
+  approvedBy  String?
+  approver    User?     @relation("StepApprover", fields: [approvedBy], references: [id])
+  approvalNotes String?
   updatedAt   DateTime       @updatedAt
   step        OnboardingStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  status      String    @default("LOCKED")
-  completedAt DateTime?
-  updatedAt   DateTime  @updatedAt
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, stepId])
   @@index([stepId], map: "UserOnboardingProgress_stepId_fkey")
@@ -216,6 +222,7 @@ model Course {
   requiredFor      Prerequisite[]     @relation("PrereqCourse")
   pathCourses      LearningPathCourse[]
   dayRequirements  DayRequiredLearning[]
+  onboardingAssignments OnboardingCourseAssignment[]
 }
 
 model LearningPath {
@@ -297,13 +304,18 @@ model Quiz {
 }
 
 model QuizQuestion {
-  id       String @id @default(cuid())
-  quizId   String
-  quiz     Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  question String
-  options  String
-  correct  String
-  order    Int    @default(0)
+  id          String @id @default(cuid())
+  quizId      String?
+  quiz        Quiz?  @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  courseQuizId String?
+  courseQuiz  CourseQuiz? @relation(fields: [courseQuizId], references: [id], onDelete: Cascade)
+  question    String
+  options     String
+  correct     String
+  order       Int    @default(0)
+
+  @@index([quizId], map: "QuizQuestion_quizId_fkey")
+  @@index([courseQuizId], map: "QuizQuestion_courseQuizId_fkey")
 }
 
 model Assignment {
@@ -375,15 +387,24 @@ model LessonProgress {
 }
 
 model QuizAttempt {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  quizId    String
-  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  score     Float
-  passed    Boolean
-  answers   String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId      String?
+  quiz        Quiz?    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  courseQuizId String?
+  courseQuiz  CourseQuiz? @relation(fields: [courseQuizId], references: [id], onDelete: Cascade)
+  score       Float
+  passed      Boolean
+  answers     String
+  approvedAt  DateTime?
+  approvedBy  String?
+  approver    User?    @relation("QuizApprover", fields: [approvedBy], references: [id])
+  approvalNotes String?
+  createdAt   DateTime @default(now())
+
+  @@index([quizId], map: "QuizAttempt_quizId_fkey")
+  @@index([userId], map: "QuizAttempt_userId_fkey")
 }
 
 model AssignmentSubmission {
@@ -559,7 +580,8 @@ model Project {
   id             String                 @id @default(cuid())
   name           String
   description    String?
-  category       String?
+  categoryId     String?
+  categoryRel    ProjectCategory? @relation("ProjectCategoryRelation", fields: [categoryId], references: [id], onDelete: SetNull)
   status         String   @default("ACTIVE")
   startDate      DateTime?
   endDate        DateTime?
@@ -576,6 +598,7 @@ model Project {
   certifications ProjectCertification[]
 
   @@index([createdBy], map: "Project_createdBy_fkey")
+  @@index([categoryId], map: "Project_categoryId_fkey")
 }
 
 model ProjectAssignment {
