@@ -36,6 +36,17 @@ export default async function AdminUsersPage() {
     orderBy: { name: "asc" },
   });
 
+  const courses = await prisma.course.findMany({
+    where: { published: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      published: true,
+    },
+    orderBy: { title: "asc" },
+  });
+
   // Fetch user assignments
   const assignments = await prisma.projectAssignment.findMany({
     select: {
@@ -44,5 +55,13 @@ export default async function AdminUsersPage() {
     },
   });
 
-  return <UsersClient users={users} projects={projects} assignments={assignments} />;
+  // Fetch user enrollments
+  const enrollments = await prisma.enrollment.findMany({
+    select: {
+      userId: true,
+      courseId: true,
+    },
+  });
+
+  return <UsersClient users={users} projects={projects} courses={courses} assignments={assignments} enrollments={enrollments} />;
 }

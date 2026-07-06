@@ -6,7 +6,7 @@ import { ContinueLearning } from "@/components/learning/ContinueLearning";
 import { LearningPathTimeline } from "@/components/learning/LearningPathTimeline";
 import { AchievementBadges } from "@/components/learning/AchievementBadges";
 import { ProgressRing } from "@/components/learning/ProgressRing";
-import { Flame, Clock, BookOpen, Target } from "lucide-react";
+import { Flame, Clock, BookOpen, Target, Award } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default async function TraineeDashboard() {
@@ -46,7 +46,7 @@ export default async function TraineeDashboard() {
             include: { course: true },
           },
         },
-      }),
+ }),
       prisma.lessonProgress.findMany({
         where: { userId: user.id, completed: true },
         orderBy: { completedAt: "desc" },
@@ -121,12 +121,15 @@ export default async function TraineeDashboard() {
     _sum: { timeSpentSec: true },
   });
 
+  const completedCourses = enrollments.filter((e) => e.status === "COMPLETED").length;
+  const inProgressCourses = enrollments.filter((e) => e.status === "IN_PROGRESS").length;
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold">Learning Hub</h1>
         <p className="text-slate-400">
-          Welcome back, {user.name} · Day {currentDay} · Project: {profile?.projectAssigned}
+          Welcome back, {user.name}
         </p>
       </div>
 
@@ -148,21 +151,50 @@ export default async function TraineeDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
+            icon: BookOpen,
+            label: "Courses",
+            value: `${enrollments.length} enrolled`,
+          },
+          {
+            icon: Target,
+            label: "In Progress",
+            value: `${inProgressCourses} courses`,
+          },
+          {
+            icon: Award,
+            label: "Completed",
+            value: `${completedCourses} courses`,
+          },
+          { icon: Flame, label: "Learning Streak", value: `${streak?.currentStreak ?? 0} days` },
+        ].map((stat) => (
+          <div key={stat.label} className="glass-panel flex items-center gap-4 p-5">
+            <div className="rounded-xl bg-blue-600/20 p-3">
+              <stat.icon className="h-6 w-6 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">{stat.label}</p>
+              <p className="text-xl font-bold">{stat.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          {
             icon: Target,
             label: "Course Progress",
             value: `${Math.round(primaryEnrollment?.progressPercent ?? 0)}%`,
           },
-          { icon: Flame, label: "Learning Streak", value: `${streak?.currentStreak ?? 0} days` },
           {
             icon: Clock,
             label: "Time Spent",
             value: `${Math.round((totalTime._sum.timeSpentSec ?? 0) / 60)} min`,
           },
-          { icon: BookOpen, label: "Courses", value: `${enrollments.length} enrolled` },
         ].map((stat) => (
           <div key={stat.label} className="glass-panel flex items-center gap-4 p-5">
-            <div className="rounded-xl bg-blue-600/20 p-3">
-              <stat.icon className="h-6 w-6 text-blue-400" />
+            <div className="rounded-xl bg-emerald-600/20 p-3">
+              <stat.icon className="h-6 w-6 text-emerald-400" />
             </div>
             <div>
               <p className="text-xs text-slate-500">{stat.label}</p>

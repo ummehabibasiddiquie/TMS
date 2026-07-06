@@ -5,7 +5,8 @@ import { formatRole } from "@/lib/roles";
 import { AddUserModal } from "@/components/admin/AddUserModal";
 import { EditUserModal } from "@/components/admin/EditUserModal";
 import { AssignProjectModal } from "@/components/admin/AssignProjectModal";
-import { Pencil, Trash2, FolderKanban } from "lucide-react";
+import { AssignCourseModal } from "@/components/admin/AssignCourseModal";
+import { Pencil, Trash2, FolderKanban, BookOpen } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type User = {
@@ -26,31 +27,54 @@ type Project = {
   } | null;
 };
 
+type Course = {
+  id: string;
+  title: string;
+  description: string | null;
+  published: boolean;
+};
+
 type Assignment = {
   userId: string;
   projectId: string;
 };
 
+type Enrollment = {
+  userId: string;
+  courseId: string;
+};
+
 interface UsersClientProps {
   users: User[];
   projects: Project[];
+  courses: Course[];
   assignments: Assignment[];
+  enrollments: Enrollment[];
 }
 
-export function UsersClient({ users, projects, assignments }: UsersClientProps) {
+export function UsersClient({ users, projects, courses, assignments, enrollments }: UsersClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [assigningUser, setAssigningUser] = useState<User | null>(null);
+  const [enrollingUser, setEnrollingUser] = useState<User | null>(null);
   const [userList, setUserList] = useState(users);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [departmentFilter, setDepartmentFilter] = useState("All Departments");
   const [assignmentsList, setAssignmentsList] = useState(assignments);
+  const [enrollmentsList, setEnrollmentsList] = useState(enrollments);
 
   const getUserProjects = (userId: string) => {
     return assignmentsList
       .filter(a => a.userId === userId)
       .map(a => projects.find(p => p.id === a.projectId)?.name)
+      .filter(Boolean);
+  };
+
+  const getUserCourses = (userId: string) => {
+    return enrollmentsList
+      .filter(e => e.userId === userId)
+      .map(e => courses.find(c => c.id === e.courseId)?.title)
       .filter(Boolean);
   };
 
@@ -110,6 +134,19 @@ export function UsersClient({ users, projects, assignments }: UsersClientProps) 
     }
   };
 
+  const handleEnrollmentsUpdate = async () => {
+    // Refresh enrollments from server
+    try {
+      const res = await fetch("/api/enrollments");
+      const data = await res.json();
+      if (data.enrollments) {
+        setEnrollmentsList(data.enrollments);
+      }
+    } catch (err) {
+      console.error("Failed to refresh enrollments:", err);
+    }
+  };
+
   return (
     <>
       <div className="w-full space-y-8">
@@ -160,7 +197,7 @@ export function UsersClient({ users, projects, assignments }: UsersClientProps) 
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-slate-500">
                 <tr className="border-b border-slate-800">
-                  {["Name", "Email", "Role", "Department", "Joined", "Status", "Projects", ""].map((header) => (
+                  {["Name", "Email", "Role", "Department", "Joined", "Status", "Projects", "Courses", ""].map((header) => (
                     <th key={header} className="py-3 font-medium">{header}</th>
                   ))}
                 </tr>
@@ -195,7 +232,29 @@ export function UsersClient({ users, projects, assignments }: UsersClientProps) 
                       </div>
                     </td>
                     <td className="py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {getUserCourses(user.id).length > 0 ? (
+                          getUserCourses(user.id).map((courseTitle, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20"
+                            >
+                              {courseTitle}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-500 text-xs">No courses</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3">
                       <div className="flex gap-1">
+                        <ActionButton
+                          icon={BookOpen}
+                          label="Assign courses"
+                          onClick={() => setEnrollingUser(user)}
+                          variant="edit"
+                        />
                         <ActionButton
                           icon={FolderKanban}
                           label="Assign projects"
@@ -247,6 +306,16 @@ export function UsersClient({ users, projects, assignments }: UsersClientProps) 
           projects={projects}
           currentAssignments={assignmentsList.filter(a => a.userId === assigningUser.id).map(a => a.projectId)}
           onSuccess={handleAssignmentsUpdate}
+        />
+      )}
+      {enrollingUser && (
+        <AssignCourseModal
+          isOpen={!!enrollingUser}
+          onClose={() => setEnrollingUser(null)}
+          user={enrollingUser}
+          courses={courses}
+          currentEnrollments={enrollmentsList.filter(e => e.userId === enrollingUser.id).map(e => e.courseId)}
+          onSuccess={handleEnrollmentsUpdate}
         />
       )}
     </>

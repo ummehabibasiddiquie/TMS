@@ -36,6 +36,15 @@ const navItems: { section: string; items: NavItem[] }[] = [
     ],
   },
   {
+    section: "My Learning",
+    items: [
+      { href: "/trainee", label: "Dashboard", icon: LayoutDashboard, roles: ["TRAINEE"] },
+      { href: "/trainee/courses", label: "My Courses", icon: BookOpen, roles: ["TRAINEE"] },
+      { href: "/trainee/progress", label: "Progress", icon: BarChart3, roles: ["TRAINEE"] },
+      { href: "/trainee/training", label: "Daily Training", icon: ClipboardCheck, roles: ["TRAINEE"] },
+    ],
+  },
+  {
     section: "Projects",
     items: [
       { href: "/projects", label: "Project List", icon: FolderKanban, roles: ["TRAINEE", "TRAINER"] },

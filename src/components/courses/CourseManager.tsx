@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, X, FolderOpen, Image as ImageIcon, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, X, FolderOpen, Image as ImageIcon, Upload, UserPlus } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type Course = {
@@ -154,6 +154,12 @@ export function CourseManager({
                   <FolderOpen className="h-4 w-4" />
                   Manage Content
                 </Link>
+                <ActionButton
+                  icon={UserPlus}
+                  label="Assign users"
+                  onClick={() => router.push(`/admin/users`)}
+                  variant="edit"
+                />
                 <span
                   className={`rounded-full px-3 py-1 text-xs ${
                     c.published
