@@ -151,7 +151,7 @@ export default function TraineeProgressPage() {
           {courseProgress.map((course: any) => (
             <div key={course.courseId} className="border border-slate-800 rounded-lg overflow-hidden">
               <button
-                onClick={() => toggleCourse(course.courseId)}
+                onClick={() => toggleProject(course.courseId)}
                 className="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition"
               >
                 <div className="flex items-center gap-4">
@@ -177,12 +177,12 @@ export default function TraineeProgressPage() {
                   </span>
                   <ChevronDown
                     className={`h-5 w-5 text-slate-400 transition ${
-                      expandedCourses.has(course.courseId) ? "rotate-180" : ""
+                      expandedProjects.has(course.courseId) ? "rotate-180" : ""
                     }`}
                   />
                 </div>
               </button>
-              {expandedCourses.has(course.courseId) && (
+              {expandedProjects.has(course.courseId) && (
                 <div className="border-t border-slate-800 p-4 bg-slate-800/30">
                   <h5 className="text-sm font-medium text-slate-300 mb-3">Module Progress</h5>
                   <div className="space-y-3">

@@ -138,7 +138,7 @@ export default async function CoursesPage() {
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
           <BookOpen className="mx-auto h-12 w-12 text-slate-600" />
           <h3 className="mt-4 text-lg font-medium text-white">No courses enrolled</h3>
-          <p className="mt-2 text-slate-400">You haven't been assigned any courses yet.</p>
+          <p className="mt-2 text-slate-400">You have not been assigned any courses yet.</p>
         </div>
       )}
     </div>
