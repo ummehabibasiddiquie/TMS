@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function GET(req: Request) {
-  const user = await requireSession(["ADMIN"]);
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);

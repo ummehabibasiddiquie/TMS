@@ -21,5 +21,28 @@ export default async function AdminUsersPage() {
     },
   });
 
-  return <UsersClient users={users} />;
+  const projects = await prisma.project.findMany({
+    where: { active: true },
+    select: {
+      id: true,
+      name: true,
+      categoryRel: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  // Fetch user assignments
+  const assignments = await prisma.projectAssignment.findMany({
+    select: {
+      userId: true,
+      projectId: true,
+    },
+  });
+
+  return <UsersClient users={users} projects={projects} assignments={assignments} />;
 }

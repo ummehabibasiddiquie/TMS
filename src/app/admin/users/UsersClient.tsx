@@ -4,7 +4,8 @@ import { useState } from "react";
 import { formatRole } from "@/lib/roles";
 import { AddUserModal } from "@/components/admin/AddUserModal";
 import { EditUserModal } from "@/components/admin/EditUserModal";
-import { Pencil, Trash2 } from "lucide-react";
+import { AssignProjectModal } from "@/components/admin/AssignProjectModal";
+import { Pencil, Trash2, FolderKanban } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type User = {
@@ -16,17 +17,42 @@ type User = {
   dateOfJoining: Date | null;
 };
 
+type Project = {
+  id: string;
+  name: string;
+  categoryRel: {
+    id: string;
+    name: string;
+  } | null;
+};
+
+type Assignment = {
+  userId: string;
+  projectId: string;
+};
+
 interface UsersClientProps {
   users: User[];
+  projects: Project[];
+  assignments: Assignment[];
 }
 
-export function UsersClient({ users }: UsersClientProps) {
+export function UsersClient({ users, projects, assignments }: UsersClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [assigningUser, setAssigningUser] = useState<User | null>(null);
   const [userList, setUserList] = useState(users);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [departmentFilter, setDepartmentFilter] = useState("All Departments");
+  const [assignmentsList, setAssignmentsList] = useState(assignments);
+
+  const getUserProjects = (userId: string) => {
+    return assignmentsList
+      .filter(a => a.userId === userId)
+      .map(a => projects.find(p => p.id === a.projectId)?.name)
+      .filter(Boolean);
+  };
 
   const filteredUsers = userList.filter((user) => {
     const matchesSearch =
@@ -68,6 +94,19 @@ export function UsersClient({ users }: UsersClientProps) {
     } catch (err) {
       alert("Failed to delete user. Please try again.");
       console.error("Delete error:", err);
+    }
+  };
+
+  const handleAssignmentsUpdate = async () => {
+    // Refresh assignments from server
+    try {
+      const res = await fetch("/api/project-assignments");
+      const data = await res.json();
+      if (data.assignments) {
+        setAssignmentsList(data.assignments);
+      }
+    } catch (err) {
+      console.error("Failed to refresh assignments:", err);
     }
   };
 
@@ -121,7 +160,7 @@ export function UsersClient({ users }: UsersClientProps) {
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-slate-500">
                 <tr className="border-b border-slate-800">
-                  {["Name", "Email", "Role", "Department", "Joined", "Status", ""].map((header) => (
+                  {["Name", "Email", "Role", "Department", "Joined", "Status", "Projects", ""].map((header) => (
                     <th key={header} className="py-3 font-medium">{header}</th>
                   ))}
                 </tr>
@@ -140,7 +179,29 @@ export function UsersClient({ users }: UsersClientProps) {
                     </td>
                     <td className="py-3">Active</td>
                     <td className="py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {getUserProjects(user.id).length > 0 ? (
+                          getUserProjects(user.id).map((projectName, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-400 border border-blue-500/20"
+                            >
+                              {projectName}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-500 text-xs">No projects</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3">
                       <div className="flex gap-1">
+                        <ActionButton
+                          icon={FolderKanban}
+                          label="Assign projects"
+                          onClick={() => setAssigningUser(user)}
+                          variant="edit"
+                        />
                         <ActionButton
                           icon={Pencil}
                           label="Edit user"
@@ -176,6 +237,16 @@ export function UsersClient({ users }: UsersClientProps) {
               dateOfJoining: updatedUser.dateOfJoining ? new Date(updatedUser.dateOfJoining) : null
             } : u));
           }}
+        />
+      )}
+      {assigningUser && (
+        <AssignProjectModal
+          isOpen={!!assigningUser}
+          onClose={() => setAssigningUser(null)}
+          user={assigningUser}
+          projects={projects}
+          currentAssignments={assignmentsList.filter(a => a.userId === assigningUser.id).map(a => a.projectId)}
+          onSuccess={handleAssignmentsUpdate}
         />
       )}
     </>

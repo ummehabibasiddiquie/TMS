@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Award, RotateCcw } from "lucide-react";
-import { landscapeQuiz } from "@/lib/onboarding-data";
 import { cn } from "@/lib/utils";
 
 export type CertificationQuestion = {
@@ -12,7 +11,15 @@ export type CertificationQuestion = {
   correctIndex: number;
 };
 
-export function QuizClient({ questions = landscapeQuiz }: { questions?: CertificationQuestion[] }) {
+export function ProjectQuizClient({ 
+  questions, 
+  projectId, 
+  projectName 
+}: { 
+  questions: CertificationQuestion[];
+  projectId: string;
+  projectName: string;
+}) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const answeredCount = Object.keys(answers).length;
@@ -23,6 +30,30 @@ export function QuizClient({ questions = landscapeQuiz }: { questions?: Certific
   );
   const passed = score / questions.length >= 0.8;
 
+  const handleSubmit = async () => {
+    // Save quiz attempt to database
+    try {
+      const response = await fetch('/api/quiz/attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          score,
+          passed,
+          answers,
+          totalQuestions: questions.length
+        }),
+      });
+      if (response.ok) {
+        setSubmitted(true);
+      }
+    } catch (error) {
+      console.error('Failed to submit quiz:', error);
+      // Still show results even if save fails
+      setSubmitted(true);
+    }
+  };
+
   if (submitted) {
     return (
       <div className="space-y-6">
@@ -30,7 +61,7 @@ export function QuizClient({ questions = landscapeQuiz }: { questions?: Certific
           <Award className={cn("h-10 w-10", passed ? "text-emerald-300" : "text-amber-300")} />
           <h2 className="mt-4 text-2xl font-bold text-white">{passed ? "Certification earned" : "Retake recommended"}</h2>
           <p className="mt-2 text-slate-400">
-            You scored {score} / {questions.length}. {passed ? "Your Landscape badge is ready." : "Review the explanations and try again."}
+            You scored {score} / {questions.length}. {passed ? `Your ${projectName} badge is ready.` : "Review the explanations and try again."}
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             {passed && (
@@ -105,7 +136,7 @@ export function QuizClient({ questions = landscapeQuiz }: { questions?: Certific
       <button
         type="button"
         disabled={!allAnswered}
-        onClick={() => setSubmitted(true)}
+        onClick={handleSubmit}
         className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {allAnswered ? "Submit All Answers" : `Answer ${questions.length - answeredCount} more to submit`}

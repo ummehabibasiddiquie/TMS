@@ -39,8 +39,6 @@ const navItems: { section: string; items: NavItem[] }[] = [
     section: "Projects",
     items: [
       { href: "/projects", label: "Project List", icon: FolderKanban, roles: ["TRAINEE", "TRAINER"] },
-      { href: "/projects/landscape/train", label: "Landscape", icon: BookOpen, roles: ["TRAINEE", "TRAINER"] },
-      { href: "/projects/landscape/quiz", label: "Quiz", icon: ClipboardCheck, roles: ["TRAINEE"] },
     ],
   },
   {

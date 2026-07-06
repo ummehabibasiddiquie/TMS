@@ -64,7 +64,7 @@ export default function LoginPage() {
             Internal onboarding before live project work.
           </h1>
           <p className="mt-4 max-w-md text-slate-400">
-            Employees complete setup, Landscape training, and an 80% certification quiz while team leads and admins
+            Employees complete setup, project training, and an 80% certification quiz while team leads and admins
             track progress.
           </p>
         </div>

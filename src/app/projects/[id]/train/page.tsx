@@ -1,19 +1,57 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, AlertTriangle, Check, Minus } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Check, Minus } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
-import { landscapeModules } from "@/lib/onboarding-data";
 import { prisma } from "@/lib/db";
 
-// Note: This page is kept for backward compatibility with the Landscape training content
-// The training modules are now managed through the Course system
-
-export default async function LandscapeTrainingPage() {
+export default async function ProjectTrainingPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const user = await getSession();
   if (!user) redirect("/login");
-  const landscapeCourse = await prisma.course.findFirst({
-    where: { title: { contains: "Landscape" } },
+
+  // Verify user has access to this project
+  const project = await prisma.project.findUnique({
+    where: { id: params.id },
+    include: {
+      assignments: true,
+    },
+  });
+
+  if (!project) {
+    return (
+      <AppShell user={user}>
+        <div className="mx-auto max-w-6xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white">Project not found</h1>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const isAssigned = project.assignments.some((a) => a.userId === user.id);
+  const isAdmin = user.role === "ADMIN";
+  const isTeamLead = user.role === "TRAINER";
+
+  if (!isAdmin && !isTeamLead && !isAssigned) {
+    return (
+      <AppShell user={user}>
+        <div className="mx-auto max-w-6xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white">Access Denied</h1>
+          <p className="mt-2 text-slate-400">You don&apos;t have permission to view this project.</p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Find course associated with this project (by name matching)
+  const course = await prisma.course.findFirst({
+    where: {
+      title: { contains: project.name },
+      published: true,
+    },
     include: {
       modules: {
         include: {
@@ -27,7 +65,35 @@ export default async function LandscapeTrainingPage() {
     },
   });
 
-  const dbModules = landscapeCourse?.modules.map((module) => ({
+  if (!course) {
+    return (
+      <AppShell user={user}>
+        <div className="mx-auto max-w-5xl space-y-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
+                {project.name} - Training
+              </p>
+              <h1 className="mt-3 text-3xl font-bold text-white">No Training Content Available</h1>
+              <p className="mt-2 max-w-2xl text-slate-400">
+                Training modules have not been set up for this project yet. Please contact your administrator.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/projects/${project.id}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Project
+          </Link>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Transform course modules into training module format
+  const modules = course.modules.map((module) => ({
     title: module.title,
     summary: module.description || `${module.lessons.length} lessons`,
     subTypes: module.lessons.map((lesson) => lesson.title).join(", ") || "General guidelines",
@@ -44,7 +110,6 @@ export default async function LandscapeTrainingPage() {
       .filter(Boolean)
       .slice(0, 2),
   }));
-  const modules = dbModules?.length ? dbModules : landscapeModules;
 
   return (
     <AppShell user={user}>
@@ -52,20 +117,24 @@ export default async function LandscapeTrainingPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
-              Landscape - Annotation Training
+              {project.name} - Training
             </p>
-            <h1 className="mt-3 text-3xl font-bold text-white">Study all 9 annotation classes</h1>
+            <h1 className="mt-3 text-3xl font-bold text-white">Study all {modules.length} modules</h1>
             <p className="mt-2 max-w-2xl text-slate-400">
-              Expand each class to read the full guidelines. All modules should be read before taking the quiz.
+              Expand each module to read the full guidelines. All modules should be read before taking the quiz.
             </p>
           </div>
-          <p className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-medium text-emerald-300">
-            3 of 9 modules read
-          </p>
+          <Link
+            href={`/projects/${project.id}/quiz`}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            Take Certification Quiz
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
 
         <div className="space-y-3">
-              {modules.map((module, index) => (
+          {modules.map((module, index) => (
             <details
               key={module.title}
               open={index === 0}
@@ -82,7 +151,7 @@ export default async function LandscapeTrainingPage() {
                 <span className="text-slate-500 group-open:rotate-90">›</span>
               </summary>
 
-                <div className="mt-5 grid gap-4 border-t border-slate-800 pt-5 md:grid-cols-3">
+              <div className="mt-5 grid gap-4 border-t border-slate-800 pt-5 md:grid-cols-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Sub-types</p>
                   <p className="mt-2 text-sm text-slate-300">{module.subTypes}</p>
@@ -116,14 +185,6 @@ export default async function LandscapeTrainingPage() {
             </details>
           ))}
         </div>
-
-        <Link
-          href="/projects/landscape/quiz"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
-        >
-          Take Certification Quiz
-          <ArrowRight className="h-4 w-4" />
-        </Link>
       </div>
     </AppShell>
   );

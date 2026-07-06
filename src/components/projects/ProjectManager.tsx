@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, X, Users, Calendar, Link as LinkIcon, FileText, FolderKanban } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Users, Calendar, Link as LinkIcon, FileText, FolderKanban, UserPlus } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type Project = {
@@ -323,6 +323,12 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
                     <td className="py-3">{project.assignments.length}</td>
                     <td className="py-3">
                       <div className="flex gap-1">
+                        <ActionButton
+                          icon={UserPlus}
+                          label="Assign users"
+                          onClick={() => router.push(`/projects/${project.id}`)}
+                          variant="edit"
+                        />
                         <ActionButton
                           icon={Pencil}
                           label="Edit project"

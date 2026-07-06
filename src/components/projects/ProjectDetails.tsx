@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, Calendar, FileText, Link as LinkIcon, Plus, X, Trash2 } from "lucide-react";
+import { ArrowLeft, Users, Calendar, FileText, Link as LinkIcon, Plus, X, Trash2, BookOpen, HelpCircle } from "lucide-react";
 
 type Project = {
   id: string;
@@ -233,6 +233,32 @@ export function ProjectDetails({ project, user }: { project: Project; user: User
               <p className="text-white whitespace-pre-wrap">{project.documentation}</p>
             </div>
           )}
+
+          <div className="glass-panel p-6">
+            <h2 className="text-lg font-semibold mb-4">Training & Certification</h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Link
+                href={`/projects/${project.id}/train`}
+                className="flex items-center gap-3 rounded-lg bg-slate-800/50 p-4 hover:bg-slate-800 transition"
+              >
+                <BookOpen className="h-5 w-5 text-blue-300" />
+                <div>
+                  <p className="font-medium text-white">Training Modules</p>
+                  <p className="text-sm text-slate-400">Study project guidelines</p>
+                </div>
+              </Link>
+              <Link
+                href={`/projects/${project.id}/quiz`}
+                className="flex items-center gap-3 rounded-lg bg-slate-800/50 p-4 hover:bg-slate-800 transition"
+              >
+                <HelpCircle className="h-5 w-5 text-amber-300" />
+                <div>
+                  <p className="font-medium text-white">Certification Quiz</p>
+                  <p className="text-sm text-slate-400">Test your knowledge</p>
+                </div>
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">

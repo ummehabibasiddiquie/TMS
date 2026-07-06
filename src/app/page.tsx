@@ -156,7 +156,7 @@ export default async function Home() {
             <div className="mt-4 grid gap-3 lg:grid-cols-3">
               {[
                 ["Manual setup checks", "Confirm accounts, tools, policy reading, and introductions."],
-                ["Training health", "Find employees stuck before Landscape training or quiz."],
+                ["Training health", "Find employees stuck before project training or quiz."],
                 ["Certification readiness", "Retake coaching for anyone below the 80% pass threshold."],
               ].map(([title, body]) => (
                 <div key={title} className="rounded-lg bg-slate-950/50 p-4">
@@ -173,6 +173,26 @@ export default async function Home() {
 
   const progress = onboardingProgress();
 
+  // Fetch assigned projects dynamically
+  const assignments = await prisma.projectAssignment.findMany({
+    where: { userId: user.id },
+    include: {
+      project: {
+        include: {
+          categoryRel: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { assignedAt: 'asc' },
+  });
+
+  const activeProject = assignments.find((a) => a.project.active)?.project;
+
   return (
     <AppShell user={user}>
       <div className="mx-auto max-w-6xl space-y-8">
@@ -181,7 +201,7 @@ export default async function Home() {
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Employee Onboarding</p>
             <h1 className="mt-3 text-3xl font-bold text-white">Your path to live project work</h1>
             <p className="mt-2 max-w-2xl text-slate-400">
-              Complete setup, read the rules, study Landscape guidelines, and pass certification.
+              Complete setup, read the rules, study project guidelines, and pass certification.
             </p>
           </div>
           <Link
@@ -204,14 +224,23 @@ export default async function Home() {
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
             <FolderKanban className="h-5 w-5 text-emerald-300" />
             <p className="mt-3 text-sm text-slate-400">Active Project</p>
-            <p className="mt-1 text-3xl font-bold text-white">Landscape</p>
-            <p className="mt-1 text-sm text-slate-500">Data annotation</p>
+            {activeProject ? (
+              <>
+                <p className="mt-1 text-3xl font-bold text-white">{activeProject.name}</p>
+                <p className="mt-1 text-sm text-slate-500">{activeProject.categoryRel?.name || activeProject.description || "Training"}</p>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-3xl font-bold text-white">None</p>
+                <p className="mt-1 text-sm text-slate-500">No projects assigned</p>
+              </>
+            )}
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
             <Award className="h-5 w-5 text-amber-300" />
             <p className="mt-3 text-sm text-slate-400">Certification Target</p>
             <p className="mt-1 text-3xl font-bold text-white">80%</p>
-            <p className="mt-1 text-sm text-slate-500">4 of 5 answers</p>
+            <p className="mt-1 text-sm text-slate-500">Pass threshold</p>
           </div>
         </section>
 

@@ -113,7 +113,7 @@ export function ProgressReportsManager({ user }: ProgressReportsManagerProps) {
       <div className="grid gap-4 md:grid-cols-3">
         {[
           ["Total Employees", statistics.totalEmployees.toString(), "All active accounts"],
-          ["Fully Onboarded", statistics.fullyOnboarded.toString(), "Landscape certified"],
+          ["Fully Onboarded", statistics.fullyOnboarded.toString(), "Project certified"],
           ["Avg Completion", statistics.avgCompletion, "Across all employees"],
         ].map(([label, value, detail]) => (
           <div key={label} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
