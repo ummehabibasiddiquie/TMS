@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export function GlobalLoader() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -29,7 +28,7 @@ export function GlobalLoader() {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   if (!loading) return null;
 
