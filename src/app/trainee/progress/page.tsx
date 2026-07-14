@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ProgressRing } from "@/components/learning/ProgressRing";
+import { PageLoader } from "@/components/ui/PageLoader";
+import { CardSkeleton } from "@/components/ui/CardSkeleton";
+import { TableSkeleton } from "@/components/ui/TableSkeleton";
 import { Target, Flame, BookOpen, Award, Clock, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -45,11 +48,7 @@ export default function TraineeProgressPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-slate-400">Loading progress...</p>
-      </div>
-    );
+    return <PageLoader message="Loading progress..." />;
   }
 
   if (!data) {

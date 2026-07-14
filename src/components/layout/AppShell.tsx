@@ -19,6 +19,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import type { Role } from "@/types";
+import { GlobalLoader } from "@/components/ui/GlobalLoader";
 
 type NavItem = {
   href: string;
@@ -96,6 +97,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen">
+      <GlobalLoader />
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
