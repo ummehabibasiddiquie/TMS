@@ -7,6 +7,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { formatRole } from "@/lib/roles";
 import type { Role } from "@/types";
 
+export const dynamic = 'force-dynamic';
+
 type User = {
   id: string;
   name: string;

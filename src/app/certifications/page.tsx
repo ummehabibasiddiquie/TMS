@@ -7,6 +7,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ProgressRing } from "@/components/learning/ProgressRing";
 import type { Role } from "@/types";
 
+export const dynamic = 'force-dynamic';
+
 type Project = {
   id: string;
   name: string;
