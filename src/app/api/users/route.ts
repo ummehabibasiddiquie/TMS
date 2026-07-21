@@ -3,12 +3,32 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { Role } from "@/types";
+import {
+  assertUserIsActiveStaff,
+  assertUserIsTrainer,
+  ensureTraineeProfile,
+} from "@/lib/trainee-profile";
 
-export async function GET() {
+export async function GET(req: Request) {
   const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(req.url);
+  const activeOnly = searchParams.get("activeOnly") !== "false";
+
+  const where =
+    user.role === "TRAINER"
+      ? {
+          ...(activeOnly ? { active: true } : {}),
+          role: "TRAINEE" as const,
+          traineeProfile: { trainerId: user.id },
+        }
+      : activeOnly
+        ? { active: true }
+        : undefined;
+
   const users = await prisma.user.findMany({
+    where,
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
@@ -16,8 +36,17 @@ export async function GET() {
       email: true,
       role: true,
       employeeId: true,
+      active: true,
       dateOfJoining: true,
       createdAt: true,
+      traineeProfile: {
+        select: {
+          trainerId: true,
+          qaId: true,
+          trainer: { select: { id: true, name: true } },
+          qa: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -25,12 +54,12 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await requireSession(["ADMIN"]);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const actor = await requireSession(["ADMIN", "TRAINER"]);
+  if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { email, password, name, employeeId, role, dateOfJoining } = await req.json();
+  const { email, password, name, employeeId, role, dateOfJoining, trainerId, qaId } =
+    await req.json();
 
-  // Validation
   if (!email?.trim() || !password?.trim() || !name?.trim() || !role) {
     return NextResponse.json(
       { error: "Email, password, name, and role are required" },
@@ -38,8 +67,23 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!["ADMIN", "TRAINER", "TRAINEE"].includes(role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  let effectiveRole = role as string;
+  let nextTrainerId: string | null = null;
+  let nextQaId: string | null = null;
+
+  if (actor.role === "TRAINER") {
+    if (role !== "TRAINEE") {
+      return NextResponse.json(
+        { error: "Team Leads can only create trainee accounts" },
+        { status: 403 }
+      );
+    }
+    effectiveRole = "TRAINEE";
+    nextTrainerId = actor.id;
+  } else {
+    if (!["ADMIN", "TRAINER", "TRAINEE"].includes(role)) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
   }
 
   if (password.length < 6) {
@@ -55,7 +99,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Check for duplicate email
     const existingUserByEmail = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
     });
@@ -64,7 +107,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });
     }
 
-    // Check for duplicate employeeId if provided
     if (employeeId?.trim()) {
       const existingUserByEmployeeId = await prisma.user.findUnique({
         where: { employeeId: employeeId.trim() },
@@ -75,18 +117,43 @@ export async function POST(req: Request) {
       }
     }
 
-    // Hash password
+    if (effectiveRole === "TRAINEE" && actor.role === "ADMIN") {
+      if (trainerId) {
+        await assertUserIsTrainer(trainerId);
+        nextTrainerId = trainerId;
+      }
+      if (qaId) {
+        await assertUserIsActiveStaff(qaId);
+        nextQaId = qaId;
+      }
+    }
+
     const passwordHash = await hashPassword(password);
 
-    // Create user
+    // Joined date: use provided value, otherwise today (date the account is created)
+    const joining =
+      dateOfJoining && String(dateOfJoining).trim()
+        ? new Date(dateOfJoining)
+        : new Date();
+
     const newUser = await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
         passwordHash,
         name: name.trim(),
         employeeId: employeeId?.trim() || null,
-        role: role as Role,
-        dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : null,
+        role: effectiveRole as Role,
+        dateOfJoining: Number.isNaN(joining.getTime()) ? new Date() : joining,
+        ...(effectiveRole === "TRAINEE"
+          ? {
+              traineeProfile: {
+                create: {
+                  trainerId: nextTrainerId,
+                  qaId: nextQaId,
+                },
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -94,23 +161,48 @@ export async function POST(req: Request) {
         name: true,
         role: true,
         employeeId: true,
+        active: true,
         dateOfJoining: true,
         createdAt: true,
+        traineeProfile: {
+          select: {
+            trainerId: true,
+            qaId: true,
+            trainer: { select: { id: true, name: true } },
+            qa: { select: { id: true, name: true } },
+          },
+        },
       },
     });
 
     return NextResponse.json({ user: newUser }, { status: 201 });
   } catch (error) {
     console.error("Error creating user:", error);
-    return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    const message =
+      error instanceof Error &&
+      (error.message.includes("Team Lead") || error.message.includes("QA"))
+        ? error.message
+        : "Failed to create user";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request) {
-  const admin = await requireSession(["ADMIN"]);
-  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const actor = await requireSession(["ADMIN", "TRAINER"]);
+  if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, name, email, employeeId, role, dateOfJoining, password } = await req.json();
+  const {
+    id,
+    name,
+    email,
+    employeeId,
+    role,
+    dateOfJoining,
+    password,
+    active,
+    trainerId,
+    qaId,
+  } = await req.json();
 
   if (!id) {
     return NextResponse.json({ error: "User ID is required" }, { status: 400 });
@@ -119,13 +211,67 @@ export async function PATCH(req: Request) {
   try {
     const existingUser = await prisma.user.findUnique({
       where: { id },
+      include: { traineeProfile: true },
     });
 
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check for duplicate email if changing email
+    if (actor.role === "TRAINER") {
+      if (
+        existingUser.role !== "TRAINEE" ||
+        existingUser.traineeProfile?.trainerId !== actor.id
+      ) {
+        return NextResponse.json(
+          { error: "You can only manage your own trainees" },
+          { status: 403 }
+        );
+      }
+      if (role && role !== "TRAINEE") {
+        return NextResponse.json(
+          { error: "Team Leads cannot change trainee role" },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (
+      typeof active === "boolean" &&
+      name === undefined &&
+      email === undefined &&
+      employeeId === undefined &&
+      role === undefined &&
+      dateOfJoining === undefined &&
+      password === undefined &&
+      trainerId === undefined &&
+      qaId === undefined
+    ) {
+      if (id === actor.id && active === false) {
+        return NextResponse.json(
+          { error: "Cannot deactivate your own account" },
+          { status: 400 }
+        );
+      }
+
+      const toggledUser = await prisma.user.update({
+        where: { id },
+        data: { active },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          employeeId: true,
+          active: true,
+          dateOfJoining: true,
+          createdAt: true,
+        },
+      });
+
+      return NextResponse.json({ user: toggledUser });
+    }
+
     if (email && email !== existingUser.email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
@@ -141,7 +287,6 @@ export async function PATCH(req: Request) {
       }
     }
 
-    // Check for duplicate employeeId if changing employeeId
     if (employeeId && employeeId !== existingUser.employeeId) {
       const duplicateEmployeeId = await prisma.user.findUnique({
         where: { employeeId: employeeId.trim() },
@@ -152,15 +297,31 @@ export async function PATCH(req: Request) {
       }
     }
 
-    const updateData: any = {
+    const nextRole = (
+      actor.role === "TRAINER" ? "TRAINEE" : role || existingUser.role
+    ) as Role;
+
+    const updateData: Record<string, unknown> = {
       name: name?.trim() || existingUser.name,
       email: email?.toLowerCase().trim() || existingUser.email,
-      role: role || existingUser.role,
-      employeeId: employeeId?.trim() || existingUser.employeeId,
+      role: nextRole,
+      employeeId:
+        employeeId !== undefined
+          ? employeeId?.trim() || null
+          : existingUser.employeeId,
       dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : existingUser.dateOfJoining,
     };
 
-    // Update password if provided
+    if (typeof active === "boolean") {
+      if (id === actor.id && active === false) {
+        return NextResponse.json(
+          { error: "Cannot deactivate your own account" },
+          { status: 400 }
+        );
+      }
+      updateData.active = active;
+    }
+
     if (password && password.trim()) {
       if (password.length < 6) {
         return NextResponse.json(
@@ -171,30 +332,61 @@ export async function PATCH(req: Request) {
       updateData.passwordHash = await hashPassword(password);
     }
 
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id },
       data: updateData,
+    });
+
+    if (nextRole === "TRAINEE" && actor.role === "ADMIN") {
+      const profilePatch: { trainerId?: string | null; qaId?: string | null } = {};
+      if (trainerId !== undefined) {
+        if (trainerId) await assertUserIsTrainer(trainerId);
+        profilePatch.trainerId = trainerId || null;
+      }
+      if (qaId !== undefined) {
+        if (qaId) await assertUserIsActiveStaff(qaId);
+        profilePatch.qaId = qaId || null;
+      }
+      await ensureTraineeProfile(id, profilePatch);
+    }
+
+    const withProfile = await prisma.user.findUnique({
+      where: { id },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
         employeeId: true,
+        active: true,
         dateOfJoining: true,
         createdAt: true,
+        traineeProfile: {
+          select: {
+            trainerId: true,
+            qaId: true,
+            trainer: { select: { id: true, name: true } },
+            qa: { select: { id: true, name: true } },
+          },
+        },
       },
     });
 
-    return NextResponse.json({ user: updatedUser });
+    return NextResponse.json({ user: withProfile });
   } catch (error) {
     console.error("Error updating user:", error);
-    return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+    const message =
+      error instanceof Error &&
+      (error.message.includes("Team Lead") || error.message.includes("QA"))
+        ? error.message
+        : "Failed to update user";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function DELETE(req: Request) {
-  const admin = await requireSession(["ADMIN"]);
-  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const actor = await requireSession(["ADMIN", "TRAINER"]);
+  if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await req.json();
 
@@ -202,11 +394,28 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "User ID is required" }, { status: 400 });
   }
 
-  if (id === admin.id) {
+  if (id === actor.id) {
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
   try {
+    if (actor.role === "TRAINER") {
+      const target = await prisma.user.findUnique({
+        where: { id },
+        include: { traineeProfile: true },
+      });
+      if (
+        !target ||
+        target.role !== "TRAINEE" ||
+        target.traineeProfile?.trainerId !== actor.id
+      ) {
+        return NextResponse.json(
+          { error: "You can only delete your own trainees" },
+          { status: 403 }
+        );
+      }
+    }
+
     await prisma.user.delete({
       where: { id },
     });

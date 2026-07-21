@@ -23,8 +23,8 @@ export async function POST(req: Request) {
       durationMin: durationMin ?? null,
       order: count,
       ...(type === "QUIZ" && {
-        quiz: {
-          create: { title: `${title.trim()} Quiz`, passingScore: 70 },
+        quizzes: {
+          create: { title: `${title.trim()} Quiz`, passingScore: 70, order: 0 },
         },
       }),
       ...(type === "ASSIGNMENT" && {
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
         },
       }),
     },
-    include: { topics: true, quiz: true, assignment: true },
+    include: { topics: true, quizzes: true, assignment: true },
   });
   return NextResponse.json({ lesson });
 }

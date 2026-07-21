@@ -6,9 +6,12 @@ export async function POST(req: Request) {
   const user = await requireSession(["TRAINEE", "ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { projectId, score, passed, answers, totalQuestions } = await req.json();
+  const { projectId, score, passed, totalQuestions } = await req.json();
 
-  // Verify user has access to this project
+  if (!projectId || totalQuestions == null || score == null) {
+    return NextResponse.json({ error: "Missing quiz result fields" }, { status: 400 });
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: { assignments: true },
@@ -26,11 +29,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
-  // Calculate final score as percentage
-  const scorePercent = (score / totalQuestions) * 100;
+  const scorePercent = (Number(score) / Number(totalQuestions)) * 100;
+  const quizPassed = Boolean(passed) || scorePercent >= 80;
+  const status = quizPassed ? "PENDING_REVIEW" : "FAILED";
 
-  // Create or update project certification
-  await prisma.projectCertification.upsert({
+  const certification = await prisma.projectCertification.upsert({
     where: {
       userId_projectId: {
         userId: user.id,
@@ -41,20 +44,31 @@ export async function POST(req: Request) {
       userId: user.id,
       projectId,
       score: scorePercent,
-      passed,
+      passed: quizPassed,
+      status,
       certifiedAt: new Date(),
+      reviewedAt: null,
+      reviewedById: null,
+      reviewNote: null,
     },
     update: {
       score: scorePercent,
-      passed,
+      passed: quizPassed,
+      status,
       certifiedAt: new Date(),
+      // New attempt resets approval
+      reviewedAt: null,
+      reviewedById: null,
+      reviewNote: null,
     },
   });
 
-  return NextResponse.json({ 
-    success: true, 
-    score: scorePercent, 
-    passed, 
-    totalQuestions 
+  return NextResponse.json({
+    success: true,
+    score: scorePercent,
+    scorePercent: Math.round(scorePercent),
+    passed: quizPassed,
+    status: certification.status,
+    totalQuestions,
   });
 }

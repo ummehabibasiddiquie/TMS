@@ -2,12 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Award, Download, FolderKanban, Calendar, Trophy } from "lucide-react";
+import Link from "next/link";
+import { Award, FolderKanban, Calendar, Trophy, Download, Eye, Clock } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { ProgressRing } from "@/components/learning/ProgressRing";
+import {
+  CertificateModal,
+  type CertificateData,
+} from "@/components/certifications/CertificateDocument";
+import { printCertificate } from "@/lib/print-certificate";
 import type { Role } from "@/types";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 type Project = {
   id: string;
@@ -19,16 +24,41 @@ type Project = {
   certifications: {
     id: string;
     passed: boolean;
-    certifiedAt: Date;
+    status?: string;
+    certifiedAt: string | Date;
     score: number;
   }[];
+};
+
+function certStatus(project: Project) {
+  const c = project.certifications[0];
+  if (!c) return "NONE";
+  // Strict: downloadable only after Admin / Team Lead approval
+  if (c.status === "APPROVED") return "APPROVED";
+  if (c.status === "PENDING_REVIEW") return "PENDING_REVIEW";
+  if (c.status === "REJECTED") return "REJECTED";
+  if (c.status === "FAILED") return "FAILED";
+  // Legacy rows without status: treat passed quiz as pending approval (not certified)
+  if (c.passed) return "PENDING_REVIEW";
+  return "FAILED";
+}
+
+type FinalQuizCert = {
+  id: string;
+  quizTitle: string;
+  score: number;
+  cycle: number;
+  status: string;
+  certifiedAt: string | Date;
 };
 
 export default function CertificationsPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; role: Role; email: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [finalQuizCerts, setFinalQuizCerts] = useState<FinalQuizCert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeCert, setActiveCert] = useState<CertificateData | null>(null);
 
   useEffect(() => {
     fetchUser();
@@ -57,7 +87,8 @@ export default function CertificationsPage() {
       const res = await fetch("/api/certifications");
       const data = await res.json();
       if (res.ok) {
-        setProjects(data.projects);
+        setProjects(data.projects || []);
+        setFinalQuizCerts(data.finalQuizCertificates || []);
       }
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -67,100 +98,208 @@ export default function CertificationsPage() {
   if (loading) {
     return (
       <AppShell user={user || { name: "", email: "", role: "TRAINEE" }}>
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex min-h-[40vh] items-center justify-center">
           <p className="text-slate-400">Loading...</p>
         </div>
       </AppShell>
     );
   }
 
-  if (!user) {
-    return null;
+  if (!user) return null;
+
+  const certifiedProjects = projects.filter((p) => certStatus(p) === "APPROVED");
+  const pendingReviewProjects = projects.filter((p) => certStatus(p) === "PENDING_REVIEW");
+  const inProgressProjects = projects.filter((p) => {
+    const s = certStatus(p);
+    return s === "NONE" || s === "FAILED" || s === "REJECTED";
+  });
+  const approvedFinalQuiz = finalQuizCerts.filter((c) => c.status === "APPROVED");
+
+  function toCertData(project: Project): CertificateData | null {
+    const certification = project.certifications[0];
+    if (!certification || certStatus(project) !== "APPROVED" || !user) return null;
+    return {
+      recipientName: user.name,
+      projectName: project.name,
+      categoryName: project.categoryRel?.name,
+      score: certification.score,
+      certifiedAt: certification.certifiedAt,
+      certificateId: certification.id,
+      kind: "project",
+    };
   }
 
-  const certifiedProjects = projects.filter((p) => p.certifications.length > 0 && p.certifications[0].passed);
-  const inProgressProjects = projects.filter((p) => p.certifications.length === 0 || !p.certifications[0].passed);
+  function toFinalQuizCertData(cert: FinalQuizCert): CertificateData | null {
+    if (!user || cert.status !== "APPROVED") return null;
+    return {
+      recipientName: user.name,
+      projectName: cert.quizTitle || "Final Quiz",
+      categoryName: "Final Quiz evaluation",
+      score: cert.score,
+      certifiedAt: cert.certifiedAt,
+      certificateId: cert.id,
+      kind: "final_quiz",
+    };
+  }
+
+  function openCertificate(project: Project) {
+    const data = toCertData(project);
+    if (data) setActiveCert(data);
+  }
+
+  function downloadCertificate(project: Project) {
+    const data = toCertData(project);
+    if (data) printCertificate(data);
+  }
 
   return (
     <AppShell user={user}>
-      <div className="mx-auto max-w-6xl space-y-8">
+      <div className="mx-auto max-w-5xl space-y-8">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">My Certifications</p>
-          <h1 className="mt-3 text-3xl font-bold text-white">Project certification badges</h1>
-          <p className="mt-2 text-slate-400">
-            Certifications are awarded automatically after passing each project quiz with 80% or higher.
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
+            My Certifications
+          </p>
+          <h1 className="mt-2 text-3xl font-bold text-white">Certifications</h1>
+          <p className="mt-2 max-w-xl text-slate-400">
+            Your Final Quiz certificate is issued when you complete the quiz. Project certificates
+            need Admin / Team Lead approval before view or download.
           </p>
         </div>
 
-        {/* Statistics */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           {[
             {
               icon: Trophy,
               label: "Certified",
-              value: certifiedProjects.length,
-              color: "emerald",
+              value: certifiedProjects.length + approvedFinalQuiz.length,
             },
-            {
-              icon: FolderKanban,
-              label: "In Progress",
-              value: inProgressProjects.length,
-              color: "blue",
-            },
-            {
-              icon: Award,
-              label: "Total Projects",
-              value: projects.length,
-              color: "slate",
-            },
+            { icon: Clock, label: "Pending review", value: pendingReviewProjects.length },
+            { icon: FolderKanban, label: "Not yet certified", value: inProgressProjects.length },
+            { icon: Award, label: "Assigned projects", value: projects.length },
           ].map((stat) => (
-            <div key={stat.label} className="glass-panel flex items-center gap-4 p-5">
-              <div className={`rounded-xl bg-${stat.color}-600/20 p-3`}>
-                <stat.icon className={`h-6 w-6 text-${stat.color}-400`} />
+            <div
+              key={stat.label}
+              className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4"
+            >
+              <div className="rounded-lg bg-slate-800 p-3">
+                <stat.icon className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-xs text-slate-500">{stat.label}</p>
-                <p className="text-xl font-bold">{stat.value}</p>
+                <p className="text-xl font-bold text-white">{stat.value}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Certified Projects */}
+        {approvedFinalQuiz.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Final Quiz certificate</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              {approvedFinalQuiz.map((cert) => (
+                <div
+                  key={cert.id}
+                  className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5"
+                >
+                  <div className="flex gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white">
+                      <Award className="h-7 w-7" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-lg font-semibold text-white">
+                        {cert.quizTitle || "Final Quiz"}
+                      </h2>
+                      <p className="text-sm text-slate-400">Final Quiz evaluation</p>
+                      <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-300">
+                        <span className="flex items-center gap-1">
+                          <Trophy className="h-4 w-4 text-amber-400" />
+                          Score: {Math.round(cert.score)}%
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4 text-amber-400" />
+                          {new Date(cert.certifiedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const data = toFinalQuizCertData(cert);
+                        if (data) setActiveCert(data);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-500"
+                    >
+                      <Eye className="h-4 w-4" />
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const data = toFinalQuizCertData(cert);
+                        if (data) printCertificate(data);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-700/50 px-3 py-2 text-sm text-amber-100 hover:bg-amber-950/40"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {certifiedProjects.length > 0 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Earned Certifications</h3>
+            <h3 className="text-lg font-semibold text-white">Project certificates</h3>
             <div className="grid gap-4 md:grid-cols-2">
               {certifiedProjects.map((project) => {
                 const certification = project.certifications[0];
                 return (
-                  <div key={project.id} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-5">
+                  <div
+                    key={project.id}
+                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5"
+                  >
                     <div className="flex gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-emerald-600 text-2xl font-bold text-white">
-                        <Award className="h-8 w-8" />
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                        <Award className="h-7 w-7" />
                       </div>
-                      <div className="flex-1">
-                        <h2 className="font-semibold text-white text-lg">{project.name}</h2>
-                        <p className="text-sm text-slate-400">{project.categoryRel?.name || "Uncategorized"}</p>
-                        <div className="mt-3 flex gap-4 text-sm">
-                          <div className="flex items-center gap-1 text-slate-300">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-lg font-semibold text-white">{project.name}</h2>
+                        <p className="text-sm text-slate-400">
+                          {project.categoryRel?.name || "Uncategorized"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-300">
+                          <span className="flex items-center gap-1">
                             <Trophy className="h-4 w-4 text-emerald-400" />
-                            <span>Score: {certification.score.toFixed(1)}/5</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-slate-300">
+                            Score: {Math.round(certification.score)}%
+                          </span>
+                          <span className="flex items-center gap-1">
                             <Calendar className="h-4 w-4 text-emerald-400" />
-                            <span>{new Date(certification.certifiedAt).toLocaleDateString()}</span>
-                          </div>
+                            {new Date(certification.certifiedAt).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <div className="mt-4 flex gap-3">
-                      <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500">
-                        <Download className="h-4 w-4" />
-                        Download Certificate
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openCertificate(project)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+                      >
+                        <Eye className="h-4 w-4" />
+                        View certificate
                       </button>
-                      <button className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-500/20">
-                        View Details
+                      <button
+                        type="button"
+                        onClick={() => downloadCertificate(project)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-500/20"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download PDF
                       </button>
                     </div>
                   </div>
@@ -170,42 +309,104 @@ export default function CertificationsPage() {
           </div>
         )}
 
-        {/* In Progress Projects */}
+        {pendingReviewProjects.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Pending review</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              {pendingReviewProjects.map((project) => {
+                const certification = project.certifications[0];
+                return (
+                  <div
+                    key={project.id}
+                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5"
+                  >
+                    <div className="flex gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-amber-600/80 text-white">
+                        <Clock className="h-7 w-7" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-lg font-semibold text-white">{project.name}</h2>
+                        <p className="text-sm text-slate-400">
+                          {project.categoryRel?.name || "Uncategorized"}
+                        </p>
+                        <p className="mt-2 text-sm text-amber-100">
+                          Quiz score: {Math.round(certification.score)}%. Approval is pending from
+                          your Team Lead or Admin. You cannot view or download the certificate until
+                          it is approved.
+                        </p>
+                        <span className="mt-3 inline-block rounded-md bg-amber-500/25 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100">
+                          Pending approval
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {inProgressProjects.length > 0 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">In Progress</h3>
+            <h3 className="text-lg font-semibold text-white">Assigned — not certified yet</h3>
             <div className="grid gap-4 md:grid-cols-2">
-              {inProgressProjects.map((project) => (
-                <div key={project.id} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+              {inProgressProjects.map((project) => {
+                const certification = project.certifications[0];
+                const status = certStatus(project);
+                return (
+                <div
+                  key={project.id}
+                  className="rounded-xl border border-slate-800 bg-slate-900 p-5"
+                >
                   <div className="flex gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-800 text-2xl font-bold text-slate-400">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-slate-400">
                       {project.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
-                      <h2 className="font-semibold text-white text-lg">{project.name}</h2>
-                      <p className="text-sm text-slate-500">{project.categoryRel?.name || "Uncategorized"}</p>
-                      <p className="mt-3 text-sm text-slate-400">
-                        Training in progress - complete the course and pass the quiz to earn certification
+                      <h2 className="text-lg font-semibold text-white">{project.name}</h2>
+                      <p className="text-sm text-slate-500">
+                        {project.categoryRel?.name || "Uncategorized"}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {status === "REJECTED"
+                          ? `Previous quiz (${Math.round(certification.score)}%) was not approved. Retake the quiz and wait for review.`
+                          : status === "FAILED" && certification
+                            ? `Last score: ${Math.round(certification.score)}%. Score 80%+ then wait for approval.`
+                            : "Complete training and pass the project quiz (80%+). Admin or Team Lead must approve before you are certified."}
                       </p>
                     </div>
                   </div>
-                  <button className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
-                    Continue Learning
-                  </button>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={`/projects/${project.id}/quiz`}
+                      className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                    >
+                      {certification ? "Retake project quiz" : "Take project quiz"}
+                    </Link>
+                  </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           </div>
         )}
 
         {projects.length === 0 && (
-          <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center">
             <Award className="mx-auto h-12 w-12 text-slate-600" />
-            <h3 className="mt-4 text-lg font-medium text-white">No certifications yet</h3>
-            <p className="mt-2 text-slate-400">Complete your assigned projects to earn certifications.</p>
+            <h3 className="mt-4 text-lg font-medium text-white">No assigned projects</h3>
+            <p className="mt-2 text-slate-400">
+              When Admin or Team Lead assigns you a project, it will show up here.
+            </p>
           </div>
         )}
       </div>
+
+      <CertificateModal
+        data={activeCert}
+        open={Boolean(activeCert)}
+        onClose={() => setActiveCert(null)}
+      />
     </AppShell>
   );
 }

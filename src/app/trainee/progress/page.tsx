@@ -1,277 +1,314 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ProgressRing } from "@/components/learning/ProgressRing";
 import { PageLoader } from "@/components/ui/PageLoader";
-import { CardSkeleton } from "@/components/ui/CardSkeleton";
-import { TableSkeleton } from "@/components/ui/TableSkeleton";
-import { Target, Flame, BookOpen, Award, Clock, ChevronDown } from "lucide-react";
+import {
+  Target,
+  Flame,
+  BookOpen,
+  Clock,
+  ChevronDown,
+  ClipboardCheck,
+  CheckCircle2,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { TrackerProgressPanel } from "@/components/tracker/TrackerProgressPanel";
 
 export default function TraineeProgressPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchProgress();
+    void (async () => {
+      try {
+        const res = await fetch("/api/trainee/progress");
+        const result = await res.json();
+        if (res.ok) setData(result);
+      } catch (error) {
+        console.error("Error fetching progress:", error);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const fetchProgress = async () => {
-    try {
-      const res = await fetch("/api/trainee/progress");
-      const result = await res.json();
-      if (res.ok) {
-        setData(result);
-      } else {
-        console.error("Failed to fetch progress:", result.error);
-      }
-    } catch (error) {
-      console.error("Error fetching progress:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleProject = (projectId: string) => {
-    setExpandedProjects((prev) => {
+  function toggleCourse(courseId: string) {
+    setExpandedCourses((prev) => {
       const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
+      if (next.has(courseId)) next.delete(courseId);
+      else next.add(courseId);
       return next;
     });
-  };
-
-  if (loading) {
-    return <PageLoader message="Loading progress..." />;
   }
+
+  if (loading) return <PageLoader message="Loading progress..." />;
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-slate-400">Failed to load progress data.</p>
       </div>
     );
   }
 
-  const { overall, courseProgress, recentActivity, achievements } = data;
+  const { dayWise, overall, courseProgress, recentActivity, achievements } = data;
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-3xl space-y-8">
       <div>
         <h1 className="text-3xl font-bold">My Progress</h1>
-        <p className="mt-2 text-slate-400">Track your learning journey across all courses.</p>
-      </div>
-
-      {/* Overall Statistics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            icon: BookOpen,
-            label: "Total Courses",
-            value: overall.totalCourses,
-            color: "blue",
-          },
-          {
-            icon: Target,
-            label: "Completed Courses",
-            value: overall.completedCourses,
-            color: "emerald",
-          },
-          {
-            icon: Flame,
-            label: "Current Streak",
-            value: `${overall.currentStreak} days`,
-            color: "orange",
-          },
-          {
-            icon: Clock,
-            label: "Longest Streak",
-            value: `${overall.longestStreak} days`,
-            color: "orange",
-          },
-        ].map((stat) => (
-          <div key={stat.label} className="glass-panel flex items-center gap-4 p-5">
-            <div className={`rounded-xl bg-${stat.color}-600/20 p-3`}>
-              <stat.icon className={`h-6 w-6 text-${stat.color}-400`} />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">{stat.label}</p>
-              <p className="text-xl font-bold">{stat.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            icon: BookOpen,
-            label: "In Progress",
-            value: overall.inProgressCourses,
-            color: "blue",
-          },
-          {
-            icon: Target,
-            label: "Not Started",
-            value: overall.notStartedCourses,
-            color: "slate",
-          },
-        ].map((stat) => (
-          <div key={stat.label} className="glass-panel flex items-center gap-4 p-5">
-            <div className={`rounded-xl bg-${stat.color}-600/20 p-3`}>
-              <stat.icon className={`h-6 w-6 text-${stat.color}-400`} />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">{stat.label}</p>
-              <p className="text-xl font-bold">{stat.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Overall Progress Ring */}
-      <div className="glass-panel flex flex-col items-center p-8">
-        <ProgressRing percent={overall.overallProgress} size={180} label="Overall Progress" />
-        <p className="mt-4 text-sm text-slate-400">
-          {Math.round(overall.overallProgress)}% of all assigned learning content completed
+        <p className="mt-2 text-slate-400">
+          Today and overall onboarding first — production tracker work appears after training is
+          complete (≥90%).
         </p>
       </div>
 
-      {/* Course Progress */}
-      <div className="glass-panel p-6">
-        <h3 className="text-lg font-semibold mb-4">Course Progress</h3>
-        <div className="space-y-4">
-          {courseProgress.map((course: any) => (
-            <div key={course.courseId} className="border border-slate-800 rounded-lg overflow-hidden">
-              <button
-                onClick={() => toggleProject(course.courseId)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition"
-              >
-                <div className="flex items-center gap-4">
-                  <ProgressRing percent={course.progressPercent} size={60} />
-                  <div className="text-left">
-                    <h4 className="font-medium">{course.courseName}</h4>
-                    <p className="text-sm text-slate-500">{course.courseDescription || "No description"}</p>
-                    <div className="flex gap-4 mt-1 text-xs text-slate-400">
-                      <span>{course.totalModules} modules</span>
-                      <span>{course.completedLessons}/{course.totalLessons} lessons</span>
+      <TrackerProgressPanel />
+
+      {/* Day-wise onboarding */}
+      <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-300">
+              Onboarding & training
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">
+              {dayWise?.todayTitle || `Day ${dayWise?.currentDay ?? "—"}`}
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Day {dayWise?.currentDay ?? 0} of {dayWise?.totalDays ?? 0}
+              {dayWise?.todayDone ? " · Today complete" : ""}
+            </p>
+          </div>
+          <Link
+            href="/trainee/training"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            Today&apos;s Work
+          </Link>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center gap-4 rounded-xl border border-slate-700/80 bg-slate-950/40 p-4">
+            <ProgressRing percent={dayWise?.todayPercent ?? 0} size={72} strokeWidth={6} />
+            <div>
+              <p className="text-xs uppercase text-slate-500">Today</p>
+              <p className="text-2xl font-semibold tabular-nums">
+                {Math.round(dayWise?.todayPercent ?? 0)}%
+              </p>
+              <p className="text-xs text-slate-500">
+                {dayWise?.todayCompleted ?? 0}/{dayWise?.todayTotal ?? 0} items
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 rounded-xl border border-slate-700/80 bg-slate-950/40 p-4">
+            <ProgressRing percent={dayWise?.overallPercent ?? 0} size={72} strokeWidth={6} />
+            <div>
+              <p className="text-xs uppercase text-slate-500">Overall onboarding</p>
+              <p className="text-2xl font-semibold tabular-nums">
+                {Math.round(dayWise?.overallPercent ?? 0)}%
+              </p>
+              <p className="text-xs text-slate-500">Across all plan days</p>
+            </div>
+          </div>
+        </div>
+
+        {dayWise?.days?.length > 0 && (
+          <ul className="mt-6 space-y-2">
+            {dayWise.days.map(
+              (d: {
+                dayNumber: number;
+                title: string;
+                projectName: string | null;
+                percent: number;
+                done: boolean;
+                status: string;
+              }) => (
+                <li
+                  key={d.dayNumber}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/30 px-3 py-2.5 text-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    {d.status === "done" || d.done ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    ) : d.status === "current" ? (
+                      <Target className="h-4 w-4 shrink-0 text-blue-400" />
+                    ) : (
+                      <Clock className="h-4 w-4 shrink-0 text-slate-600" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-200">
+                        Day {d.dayNumber}: {d.title}
+                      </p>
+                      {d.projectName && (
+                        <p className="truncate text-xs text-slate-500">{d.projectName}</p>
+                      )}
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${
-                    course.status === "COMPLETED"
-                      ? "bg-emerald-500/20 text-emerald-300"
-                      : course.status === "IN_PROGRESS"
-                        ? "bg-blue-500/20 text-blue-300"
-                        : "bg-slate-700 text-slate-400"
-                  }`}>
-                    {course.status.replace("_", " ")}
-                  </span>
-                  <ChevronDown
-                    className={`h-5 w-5 text-slate-400 transition ${
-                      expandedProjects.has(course.courseId) ? "rotate-180" : ""
+                  <span
+                    className={`shrink-0 text-xs tabular-nums ${
+                      d.status === "current"
+                        ? "text-blue-300"
+                        : d.done
+                          ? "text-emerald-300"
+                          : "text-slate-500"
                     }`}
-                  />
-                </div>
-              </button>
-              {expandedProjects.has(course.courseId) && (
-                <div className="border-t border-slate-800 p-4 bg-slate-800/30">
-                  <h5 className="text-sm font-medium text-slate-300 mb-3">Module Progress</h5>
-                  <div className="space-y-3">
-                    {course.moduleProgress.map((module: any) => (
-                      <div key={module.moduleId}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-slate-400">{module.moduleName}</span>
-                          <span className="text-slate-500">{Math.round(module.progress)}%</span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-900">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400"
-                            style={{ width: `${module.progress}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {module.completedLessons}/{module.totalLessons} lessons
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  >
+                    {d.percent}%
+                  </span>
+                </li>
+              )
+            )}
+          </ul>
+        )}
+
+        {(!dayWise || dayWise.source === "empty") && (
+          <p className="mt-4 text-sm text-slate-500">
+            No day-wise plan yet. Your Team Lead will set up the curriculum.
+          </p>
+        )}
+      </div>
+
+      {/* Secondary course stats */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Course review
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            { icon: BookOpen, label: "Courses", value: overall.totalCourses },
+            { icon: Target, label: "Completed", value: overall.completedCourses },
+            { icon: Flame, label: "Streak", value: `${overall.currentStreak}d` },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4"
+            >
+              <stat.icon className="h-5 w-5 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-500">{stat.label}</p>
+                <p className="text-lg font-semibold">{stat.value}</p>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Recent Activity */}
-      <div className="glass-panel p-6">
-        <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-        {recentActivity.length === 0 ? (
-          <p className="text-sm text-slate-500">No recent activity.</p>
-        ) : (
+      {courseProgress?.length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">Courses</h3>
+            <Link href="/trainee/courses" className="text-sm text-blue-400 hover:underline">
+              Course Library
+            </Link>
+          </div>
           <div className="space-y-3">
-            {recentActivity.map((activity: any, index: number) => (
+            {courseProgress.map((course: any) => (
+              <div
+                key={course.courseId}
+                className="overflow-hidden rounded-xl border border-slate-800"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleCourse(course.courseId)}
+                  className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-slate-800/40"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ProgressRing percent={course.progressPercent} size={48} strokeWidth={5} />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{course.courseName}</p>
+                      <p className="text-xs text-slate-500">
+                        {course.completedLessons}/{course.totalLessons} lessons
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-slate-400 transition ${
+                      expandedCourses.has(course.courseId) ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {expandedCourses.has(course.courseId) && (
+                  <div className="space-y-2 border-t border-slate-800 bg-slate-950/30 p-4">
+                    {course.moduleProgress.map((module: any) => (
+                      <div key={module.moduleId}>
+                        <div className="mb-1 flex justify-between text-xs">
+                          <span className="text-slate-400">{module.moduleName}</span>
+                          <span className="text-slate-500">{Math.round(module.progress)}%</span>
+                        </div>
+                        <div className="h-1 overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className="h-full rounded-full bg-blue-500"
+                            style={{ width: `${module.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recentActivity?.length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+          <h3 className="mb-3 text-lg font-semibold">Recent activity</h3>
+          <div className="space-y-2">
+            {recentActivity.slice(0, 5).map((activity: any, index: number) => (
               <div
                 key={index}
-                className="flex items-center justify-between rounded-lg bg-slate-800/30 px-4 py-3"
+                className="flex items-center justify-between rounded-lg bg-slate-950/40 px-3 py-2.5"
               >
-                <div>
-                  <p className="font-medium text-sm">{activity.lessonTitle}</p>
-                  <p className="text-xs text-slate-500">
-                    {activity.courseName} · {activity.moduleName}
-                  </p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{activity.lessonTitle}</p>
+                  <p className="truncate text-xs text-slate-500">{activity.courseName}</p>
                 </div>
-                <div className="text-right">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${
-                    activity.completed
-                      ? "bg-emerald-500/20 text-emerald-300"
-                      : "bg-blue-500/20 text-blue-300"
-                  }`}>
-                    {activity.completed ? "Completed" : `${Math.round(activity.watchPercent)}%`}
-                  </span>
+                <div className="shrink-0 text-right text-xs text-slate-500">
+                  {activity.completed ? "Done" : `${Math.round(activity.watchPercent)}%`}
                   {activity.completedAt && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      {formatDistanceToNow(new Date(activity.completedAt), { addSuffix: true })}
+                    <p>
+                      {formatDistanceToNow(new Date(activity.completedAt), {
+                        addSuffix: true,
+                      })}
                     </p>
                   )}
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Achievements */}
-      {achievements.length > 0 && (
-        <div className="glass-panel p-6">
-          <h3 className="text-lg font-semibold mb-4">Achievements</h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {achievements.map((achievement: any) => (
-              <div
-                key={achievement.id}
-                className={`border rounded-lg p-4 ${
-                  achievement.earned
-                    ? "border-emerald-500/30 bg-emerald-500/10"
-                    : "border-slate-800 bg-slate-800/30 opacity-50"
-                }`}
-              >
-                <div className="text-3xl mb-2">{achievement.icon || "🏆"}</div>
-                <h4 className="font-medium text-sm">{achievement.title}</h4>
-                <p className="text-xs text-slate-400 mt-1">{achievement.description}</p>
-                {achievement.earned && (
-                  <p className="text-xs text-emerald-400 mt-2">
-                    Earned {new Date(achievement.earnedAt).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            ))}
+      {achievements?.filter((a: { earned: boolean }) => a.earned).length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+          <h3 className="mb-3 text-lg font-semibold">Achievements</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {achievements
+              .filter((a: { earned: boolean }) => a.earned)
+              .map(
+                (achievement: {
+                  id: string;
+                  icon?: string;
+                  title: string;
+                  description?: string;
+                }) => (
+                  <div
+                    key={achievement.id}
+                    className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3"
+                  >
+                    <p className="font-medium text-sm">{achievement.title}</p>
+                    {achievement.description && (
+                      <p className="mt-1 text-xs text-slate-400">{achievement.description}</p>
+                    )}
+                  </div>
+                )
+              )}
           </div>
         </div>
       )}

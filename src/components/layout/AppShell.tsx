@@ -15,7 +15,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import type { Role } from "@/types";
@@ -26,29 +26,31 @@ type NavItem = {
   label: string;
   icon: React.ElementType;
   roles?: Role[];
+  /** Only show for trainees after day-wise schedule is complete (or quiz already taken). */
+  requiresFinalQuizUnlock?: boolean;
 };
 
 const navItems: { section: string; items: NavItem[] }[] = [
   {
     section: "Getting Started",
     items: [
-      { href: "/", label: "Overview", icon: LayoutDashboard },
-      { href: "/onboarding", label: "Onboarding Flow", icon: ClipboardCheck, roles: ["TRAINEE"] },
+      { href: "/", label: "Overview", icon: LayoutDashboard, roles: ["ADMIN", "TRAINER"] },
+      { href: "/onboarding", label: "Welcome", icon: ClipboardCheck, roles: ["TRAINEE"] },
     ],
   },
   {
     section: "My Learning",
     items: [
-      { href: "/trainee", label: "Dashboard", icon: LayoutDashboard, roles: ["TRAINEE"] },
-      { href: "/trainee/courses", label: "My Courses", icon: BookOpen, roles: ["TRAINEE"] },
+      { href: "/trainee/training", label: "Today's Work", icon: ClipboardCheck, roles: ["TRAINEE"] },
+      {
+        href: "/trainee/final-quiz",
+        label: "Final Quiz",
+        icon: Award,
+        roles: ["TRAINEE"],
+        requiresFinalQuizUnlock: true,
+      },
       { href: "/trainee/progress", label: "Progress", icon: BarChart3, roles: ["TRAINEE"] },
-      { href: "/trainee/training", label: "Daily Training", icon: ClipboardCheck, roles: ["TRAINEE"] },
-    ],
-  },
-  {
-    section: "Projects",
-    items: [
-      { href: "/projects", label: "Project List", icon: FolderKanban, roles: ["TRAINEE", "TRAINER"] },
+      { href: "/trainee/courses", label: "Course Library", icon: BookOpen, roles: ["TRAINEE"] },
     ],
   },
   {
@@ -61,21 +63,39 @@ const navItems: { section: string; items: NavItem[] }[] = [
   {
     section: "Team Lead",
     items: [
+      { href: "/admin/curriculum", label: "Day Curriculum", icon: ClipboardCheck, roles: ["TRAINER"] },
+      { href: "/trainer/courses", label: "Courses", icon: BookOpen, roles: ["TRAINER"] },
+      { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["TRAINER"] },
+      { href: "/admin/users", label: "Team Members", icon: Users, roles: ["TRAINER"] },
       { href: "/admin/progress", label: "Team Progress", icon: BarChart3, roles: ["TRAINER"] },
-      { href: "/trainer/reviews", label: "Reviews", icon: ClipboardCheck, roles: ["TRAINER"] },
+      { href: "/trainer/day-reviews", label: "Day Reviews", icon: ClipboardCheck, roles: ["TRAINER"] },
+      { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["TRAINER"] },
     ],
   },
   {
     section: "Admin",
     items: [
       { href: "/admin/users", label: "Manage Users", icon: Users, roles: ["ADMIN"] },
-      { href: "/admin/projects", label: "Manage Projects", icon: FolderKanban, roles: ["ADMIN", "TRAINER"] },
-      { href: "/admin/project-categories", label: "Project Categories", icon: FolderKanban, roles: ["ADMIN"] },
+      { href: "/admin/curriculum", label: "Day Curriculum", icon: ClipboardCheck, roles: ["ADMIN"] },
+      { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["ADMIN"] },
+      { href: "/admin/content", label: "Courses", icon: BookOpen, roles: ["ADMIN"] },
+      { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["ADMIN"] },
+      { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["ADMIN"] },
       { href: "/admin/progress", label: "Progress Reports", icon: BarChart3, roles: ["ADMIN"] },
-      { href: "/admin/content", label: "Content Studio", icon: BookOpen, roles: ["ADMIN"] },
+      { href: "/trainer/day-reviews", label: "Day Reviews", icon: ClipboardCheck, roles: ["ADMIN"] },
     ],
   },
 ];
+
+/** Prefer the longest matching href so /trainee does not steal /trainee/training. */
+function bestMatchingHref(pathname: string, hrefs: string[]) {
+  const matches = hrefs.filter((href) => {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
+  });
+  if (matches.length === 0) return null;
+  return matches.sort((a, b) => b.length - a.length)[0];
+}
 
 export function AppShell({
   children,
@@ -87,7 +107,38 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const canSeeItem = (item: NavItem) => !item.roles || item.roles.includes(user.role);
+  const [finalQuizUnlocked, setFinalQuizUnlocked] = useState(false);
+
+  useEffect(() => {
+    if (user.role !== "TRAINEE") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/final-evaluation");
+        const data = await res.json();
+        if (cancelled || !res.ok) return;
+        setFinalQuizUnlocked(
+          Boolean(data.scheduleComplete || data.attempted || data.unlocked)
+        );
+      } catch {
+        // keep hidden until we know
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.role, pathname]);
+
+  const canSeeItem = (item: NavItem) => {
+    if (item.roles && !item.roles.includes(user.role)) return false;
+    if (item.requiresFinalQuizUnlock && !finalQuizUnlocked) return false;
+    return true;
+  };
+
+  const visibleHrefs = navItems.flatMap((g) =>
+    g.items.filter(canSeeItem).map((i) => i.href)
+  );
+  const activeHref = bestMatchingHref(pathname, visibleHrefs);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -113,7 +164,9 @@ export function AppShell({
         )}
       >
         <div className="border-b border-slate-800 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Training Hub</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+            Training Hub
+          </p>
           <h1 className="mt-2 text-lg font-bold text-white">New Joiner Onboarding</h1>
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto p-4">
@@ -128,10 +181,10 @@ export function AppShell({
                 <div className="space-y-1">
                   {items.map((item) => {
                     const Icon = item.icon;
-                    const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
+                    const active = activeHref === item.href;
                     return (
                       <Link
-                        key={item.href}
+                        key={`${group.section}-${item.href}`}
                         href={item.href}
                         onClick={() => setOpen(false)}
                         className={cn(
@@ -165,8 +218,15 @@ export function AppShell({
           </button>
         </div>
       </aside>
-      {open && <div className="fixed inset-0 z-30 bg-slate-950/70 lg:hidden" onClick={() => setOpen(false)} />}
-      <main className="min-h-screen pt-16 lg:ml-72">{children}</main>
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-950/70 lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+      <main className="min-h-screen px-4 pb-8 pt-14 lg:ml-72 lg:px-6 lg:pb-10 lg:pt-8">
+        {children}
+      </main>
     </div>
   );
 }

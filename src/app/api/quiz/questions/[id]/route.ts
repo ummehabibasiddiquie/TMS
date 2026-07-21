@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const user = await requireSession(["ADMIN"]);
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { question, options, correct } = await req.json();
@@ -32,7 +32,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const user = await requireSession(["ADMIN"]);
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await prisma.quizQuestion.delete({ where: { id: params.id } });

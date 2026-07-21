@@ -4,9 +4,7 @@ import { useState } from "react";
 import { formatRole } from "@/lib/roles";
 import { AddUserModal } from "@/components/admin/AddUserModal";
 import { EditUserModal } from "@/components/admin/EditUserModal";
-import { AssignProjectModal } from "@/components/admin/AssignProjectModal";
-import { AssignCourseModal } from "@/components/admin/AssignCourseModal";
-import { Pencil, Trash2, FolderKanban, BookOpen } from "lucide-react";
+import { Pencil, Trash2, UserCheck, UserX } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type User = {
@@ -15,70 +13,42 @@ type User = {
   email: string;
   role: string;
   employeeId: string | null;
-  dateOfJoining: Date | null;
+  active: boolean;
+  dateOfJoining: string | null;
+  trainerId?: string | null;
+  trainerName?: string | null;
 };
 
-type Project = {
+type StaffOption = {
   id: string;
   name: string;
-  categoryRel: {
-    id: string;
-    name: string;
-  } | null;
-};
-
-type Course = {
-  id: string;
-  title: string;
-  description: string | null;
-  published: boolean;
-};
-
-type Assignment = {
-  userId: string;
-  projectId: string;
-};
-
-type Enrollment = {
-  userId: string;
-  courseId: string;
+  email: string;
 };
 
 interface UsersClientProps {
   users: User[];
-  projects: Project[];
-  courses: Course[];
-  assignments: Assignment[];
-  enrollments: Enrollment[];
+  teamLeads: StaffOption[];
+  mode?: "admin" | "teamlead";
 }
 
-export function UsersClient({ users, projects, courses, assignments, enrollments }: UsersClientProps) {
+export function UsersClient({
+  users,
+  teamLeads: initialTeamLeads,
+  mode = "admin",
+}: UsersClientProps) {
+  const isTeamLead = mode === "teamlead";
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [assigningUser, setAssigningUser] = useState<User | null>(null);
-  const [enrollingUser, setEnrollingUser] = useState<User | null>(null);
   const [userList, setUserList] = useState(users);
+  const [teamLeads, setTeamLeads] = useState(initialTeamLeads);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All Roles");
-  const [departmentFilter, setDepartmentFilter] = useState("All Departments");
-  const [assignmentsList, setAssignmentsList] = useState(assignments);
-  const [enrollmentsList, setEnrollmentsList] = useState(enrollments);
-
-  const getUserProjects = (userId: string) => {
-    return assignmentsList
-      .filter(a => a.userId === userId)
-      .map(a => projects.find(p => p.id === a.projectId)?.name)
-      .filter(Boolean);
-  };
-
-  const getUserCourses = (userId: string) => {
-    return enrollmentsList
-      .filter(e => e.userId === userId)
-      .map(e => courses.find(c => c.id === e.courseId)?.title)
-      .filter(Boolean);
-  };
+  const [statusFilter, setStatusFilter] = useState("All Statuses");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const filteredUsers = userList.filter((user) => {
+    if (isTeamLead && user.role !== "TRAINEE") return false;
+
     const matchesSearch =
       searchQuery === "" ||
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -90,60 +60,60 @@ export function UsersClient({ users, projects, courses, assignments, enrollments
       (roleFilter === "Team Lead" && user.role === "TRAINER") ||
       (roleFilter === "Employee" && user.role === "TRAINEE");
 
-    const userDepartment = user.employeeId?.startsWith("TRN") ? "Email Ops" : "Annotation";
-    const matchesDepartment =
-      departmentFilter === "All Departments" ||
-      departmentFilter === userDepartment;
+    const matchesStatus =
+      statusFilter === "All Statuses" ||
+      (statusFilter === "Active" && user.active === true) ||
+      (statusFilter === "Inactive" && user.active !== true);
 
-    return matchesSearch && matchesRole && matchesDepartment;
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+  const handleToggleActive = async (target: User) => {
+    const currentlyActive = target.active === true;
+    const nextActive = !currentlyActive;
+    const action = nextActive ? "activate" : "deactivate";
+    if (!confirm(`Are you sure you want to ${action} ${target.name}?`)) return;
 
+    setTogglingId(target.id);
+    try {
+      const res = await fetch(`/api/users/${target.id}/active`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: nextActive }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || `Failed to ${action} user`);
+        return;
+      }
+      setUserList((prev) =>
+        prev.map((u) => (u.id === target.id ? { ...u, active: data.user?.active === true } : u))
+      );
+    } catch (err) {
+      console.error("Toggle active error:", err);
+      alert(`Failed to ${action} user`);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
     try {
       const res = await fetch("/api/users", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Failed to delete user");
         return;
       }
-
       setUserList(userList.filter((u) => u.id !== id));
     } catch (err) {
-      alert("Failed to delete user. Please try again.");
       console.error("Delete error:", err);
-    }
-  };
-
-  const handleAssignmentsUpdate = async () => {
-    // Refresh assignments from server
-    try {
-      const res = await fetch("/api/project-assignments");
-      const data = await res.json();
-      if (data.assignments) {
-        setAssignmentsList(data.assignments);
-      }
-    } catch (err) {
-      console.error("Failed to refresh assignments:", err);
-    }
-  };
-
-  const handleEnrollmentsUpdate = async () => {
-    // Refresh enrollments from server
-    try {
-      const res = await fetch("/api/enrollments");
-      const data = await res.json();
-      if (data.enrollments) {
-        setEnrollmentsList(data.enrollments);
-      }
-    } catch (err) {
-      console.error("Failed to refresh enrollments:", err);
+      alert("Failed to delete user");
     }
   };
 
@@ -151,9 +121,19 @@ export function UsersClient({ users, projects, courses, assignments, enrollments
     <>
       <div className="w-full space-y-8">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Manage Users</p>
-          <h1 className="mt-3 text-3xl font-bold text-white">Create, edit, and deactivate accounts</h1>
-          <p className="mt-2 text-slate-400">Assign roles and departments for Employee, Team Lead, and Admin users.</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
+            {isTeamLead ? "Team Lead — Team members" : "Admin — Manage Users"}
+          </p>
+          <h1 className="mt-3 text-3xl font-bold text-white">
+            {isTeamLead
+              ? "Add, edit, and activate your trainees"
+              : "Create, edit, and deactivate accounts"}
+          </h1>
+          <p className="mt-2 text-slate-400">
+            {isTeamLead
+              ? "Only trainees on your team. Training content comes from Day Curriculum — no separate course or project assign."
+              : "All users (Admin, Team Lead, and Employee). Courses and work are set in Day Curriculum, not by assigning here."}
+          </p>
         </div>
 
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
@@ -172,107 +152,111 @@ export function UsersClient({ users, projects, courses, assignments, enrollments
               >
                 <option>All Roles</option>
                 <option>Employee</option>
-                <option>Team Lead</option>
-                <option>Admin</option>
+                {!isTeamLead && <option>Team Lead</option>}
+                {!isTeamLead && <option>Admin</option>}
               </select>
               <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
               >
-                <option>All Departments</option>
-                <option>Annotation</option>
-                <option>Email Ops</option>
-                <option>Operations</option>
+                <option>All Statuses</option>
+                <option>Active</option>
+                <option>Inactive</option>
               </select>
             </div>
             <button
               onClick={() => setIsModalOpen(true)}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
             >
-              + Add User
+              + {isTeamLead ? "Add trainee" : "Add User"}
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="text-slate-500">
                 <tr className="border-b border-slate-800">
-                  {["Name", "Email", "Role", "Department", "Joined", "Status", "Projects", "Courses", ""].map((header) => (
-                    <th key={header} className="py-3 font-medium">{header}</th>
+                  {(isTeamLead
+                    ? ["Name", "Email", "Role", "Joined", "Status", ""]
+                    : ["Name", "Email", "Role", "Team Lead", "Joined", "Status", ""]
+                  ).map((header) => (
+                    <th key={header || "actions"} className="py-3 font-medium">
+                      {header}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((user) => (
                   <tr key={user.id} className="border-b border-slate-800/70 text-slate-300">
-                    <td className="py-3 font-medium text-white">{user.name}</td>
+                    <td className="py-3">
+                      <div className="font-medium text-white">{user.name}</div>
+                      {user.active !== true && (
+                        <div className="mt-1 text-xs font-medium text-amber-400">
+                          Deactivated — cannot log in
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3">{user.email}</td>
                     <td className="py-3">{formatRole(user.role)}</td>
-                    <td className="py-3">{user.employeeId?.startsWith("TRN") ? "Email Ops" : "Annotation"}</td>
+                    {!isTeamLead && (
+                      <td className="py-3">
+                        {user.role === "TRAINEE" ? (
+                          user.trainerName ? (
+                            <span className="text-slate-200">{user.trainerName}</span>
+                          ) : (
+                            <span className="text-xs text-amber-400">No Team Lead</span>
+                          )
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-3">
                       {user.dateOfJoining
-                        ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "2-digit" }).format(user.dateOfJoining)
+                        ? new Intl.DateTimeFormat("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "2-digit",
+                          }).format(new Date(user.dateOfJoining))
                         : "-"}
                     </td>
-                    <td className="py-3">Active</td>
                     <td className="py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {getUserProjects(user.id).length > 0 ? (
-                          getUserProjects(user.id).map((projectName, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-400 border border-blue-500/20"
-                            >
-                              {projectName}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-500 text-xs">No projects</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {getUserCourses(user.id).length > 0 ? (
-                          getUserCourses(user.id).map((courseTitle, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20"
-                            >
-                              {courseTitle}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-500 text-xs">No courses</span>
-                        )}
-                      </div>
+                      <span
+                        className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${
+                          user.active === true
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                            : "border-amber-500/20 bg-amber-500/10 text-amber-400"
+                        }`}
+                      >
+                        {user.active === true ? "Active" : "Deactivated"}
+                      </span>
                     </td>
                     <td className="py-3">
                       <div className="flex gap-1">
-                        <ActionButton
-                          icon={BookOpen}
-                          label="Assign courses"
-                          onClick={() => setEnrollingUser(user)}
-                          variant="edit"
-                        />
-                        <ActionButton
-                          icon={FolderKanban}
-                          label="Assign projects"
-                          onClick={() => setAssigningUser(user)}
-                          variant="edit"
-                        />
-                        <ActionButton
-                          icon={Pencil}
-                          label="Edit user"
-                          onClick={() => setEditingUser(user)}
-                          variant="edit"
-                        />
-                        <ActionButton
-                          icon={Trash2}
-                          label="Delete user"
-                          onClick={() => handleDelete(user.id)}
-                          variant="delete"
-                        />
+                        {(isTeamLead ? user.role === "TRAINEE" : true) && (
+                          <>
+                            <ActionButton
+                              icon={Pencil}
+                              label="Edit user"
+                              onClick={() => setEditingUser(user)}
+                              variant="edit"
+                            />
+                            <ActionButton
+                              icon={user.active === true ? UserX : UserCheck}
+                              label={user.active === true ? "Deactivate" : "Activate"}
+                              onClick={() => void handleToggleActive(user)}
+                              variant={user.active === true ? "deactivate" : "activate"}
+                              disabled={togglingId === user.id}
+                            />
+                            <ActionButton
+                              icon={Trash2}
+                              label="Delete user"
+                              onClick={() => handleDelete(user.id)}
+                              variant="delete"
+                            />
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -280,42 +264,64 @@ export function UsersClient({ users, projects, courses, assignments, enrollments
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-sm text-slate-500">Showing {filteredUsers.length} of {userList.length} users</p>
+          <p className="mt-4 text-sm text-slate-500">
+            Showing {filteredUsers.length} of {userList.length} users
+          </p>
         </div>
       </div>
 
-      <AddUserModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AddUserModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        teamLeads={teamLeads}
+        teamLeadMode={isTeamLead}
+        onCreated={(created) => {
+          setUserList((prev) => {
+            if (prev.some((u) => u.id === created.id)) return prev;
+            return [...prev, created];
+          });
+          if (created.role === "TRAINER" && created.active) {
+            setTeamLeads((prev) => {
+              if (prev.some((t) => t.id === created.id)) return prev;
+              return [
+                ...prev,
+                { id: created.id, name: created.name, email: created.email },
+              ];
+            });
+          }
+        }}
+      />
       {editingUser && (
         <EditUserModal
           isOpen={!!editingUser}
           onClose={() => setEditingUser(null)}
           user={editingUser}
+          teamLeads={teamLeads}
+          teamLeadMode={isTeamLead}
           onSuccess={(updatedUser) => {
-            setUserList(userList.map((u) => u.id === updatedUser.id ? {
-              ...updatedUser,
-              dateOfJoining: updatedUser.dateOfJoining ? new Date(updatedUser.dateOfJoining) : null
-            } : u));
+            setUserList(
+              userList.map((u) =>
+                u.id === updatedUser.id
+                  ? {
+                      ...u,
+                      name: updatedUser.name,
+                      email: updatedUser.email,
+                      role: updatedUser.role,
+                      employeeId: updatedUser.employeeId,
+                      dateOfJoining:
+                        updatedUser.dateOfJoining == null
+                          ? null
+                          : typeof updatedUser.dateOfJoining === "string"
+                            ? updatedUser.dateOfJoining
+                            : new Date(updatedUser.dateOfJoining).toISOString(),
+                      trainerId: updatedUser.trainerId ?? null,
+                      trainerName: updatedUser.trainerName ?? null,
+                    }
+                  : u
+              )
+            );
+            setEditingUser(null);
           }}
-        />
-      )}
-      {assigningUser && (
-        <AssignProjectModal
-          isOpen={!!assigningUser}
-          onClose={() => setAssigningUser(null)}
-          user={assigningUser}
-          projects={projects}
-          currentAssignments={assignmentsList.filter(a => a.userId === assigningUser.id).map(a => a.projectId)}
-          onSuccess={handleAssignmentsUpdate}
-        />
-      )}
-      {enrollingUser && (
-        <AssignCourseModal
-          isOpen={!!enrollingUser}
-          onClose={() => setEnrollingUser(null)}
-          user={enrollingUser}
-          courses={courses}
-          currentEnrollments={enrollmentsList.filter(e => e.userId === enrollingUser.id).map(e => e.courseId)}
-          onSuccess={handleEnrollmentsUpdate}
         />
       )}
     </>

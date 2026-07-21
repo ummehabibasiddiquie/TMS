@@ -8,9 +8,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email and password required" }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email: String(email).toLowerCase().trim() },
+  });
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  }
+
+  if (!user.active) {
+    return NextResponse.json(
+      { error: "This account has been deactivated. Contact an admin." },
+      { status: 403 }
+    );
   }
 
   await createSession(user.id);

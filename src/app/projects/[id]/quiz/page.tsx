@@ -98,7 +98,10 @@ export default async function ProjectQuizPage({
             {project.name} - Certification Quiz
           </p>
           <h1 className="mt-3 text-3xl font-bold text-white">Answer all {questions.length} questions</h1>
-          <p className="mt-2 text-slate-400">Score 80%+ to earn your {project.name} certification badge.</p>
+          <p className="mt-2 text-slate-400">
+            Score 80%+ to submit for certification. An Admin or Team Lead must approve before your
+            certificate is issued.
+          </p>
         </div>
         <ProjectQuizClient questions={questions} projectId={project.id} projectName={project.name} />
       </div>

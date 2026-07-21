@@ -18,33 +18,44 @@ export async function POST(req: Request) {
 
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    include: { module: true, quiz: true },
+    include: { module: true, quizzes: { select: { id: true } } },
   });
   if (!lesson) return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
 
   const cid = courseId || lesson.module.courseId;
+
+  const existing = await prisma.lessonProgress.findUnique({
+    where: { userId_lessonId: { userId: user.id, lessonId } },
+  });
+
+  // If lesson has quizzes, content "complete" alone is not enough — all quizzes must be passed
+  let markCompleted = Boolean(completed);
+  if (markCompleted && lesson.quizzes.length > 0) {
+    const passed = Boolean(quizPassed ?? existing?.quizPassed);
+    if (!passed) markCompleted = false;
+  }
 
   const progress = await prisma.lessonProgress.upsert({
     where: { userId_lessonId: { userId: user.id, lessonId } },
     create: {
       userId: user.id,
       lessonId,
-      watchPercent: watchPercent ?? 0,
+      watchPercent: watchPercent ?? (markCompleted ? 100 : 0),
       timeSpentSec: timeSpentSec ?? 0,
-      completed: completed ?? false,
+      completed: markCompleted,
       quizScore,
       quizPassed: quizPassed ?? false,
       assignmentDone: assignmentDone ?? false,
-      completedAt: completed ? new Date() : null,
+      completedAt: markCompleted ? new Date() : null,
     },
     update: {
-      watchPercent: watchPercent ?? undefined,
+      watchPercent: watchPercent ?? (completed ? 100 : undefined),
       timeSpentSec: timeSpentSec !== undefined ? { increment: timeSpentSec } : undefined,
-      completed: completed ?? undefined,
+      completed: completed !== undefined ? markCompleted : undefined,
       quizScore: quizScore ?? undefined,
       quizPassed: quizPassed ?? undefined,
       assignmentDone: assignmentDone ?? undefined,
-      completedAt: completed ? new Date() : undefined,
+      completedAt: markCompleted ? new Date() : undefined,
     },
   });
 

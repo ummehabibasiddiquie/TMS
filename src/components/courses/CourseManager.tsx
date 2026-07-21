@@ -167,7 +167,7 @@ export function CourseManager({
                       : "bg-slate-700 text-slate-400"
                   }`}
                 >
-                  {c.published ? "Published" : "Draft"}
+                  {c.published ? "Active" : "Inactive"}
                 </span>
                 <ActionButton
                   icon={Pencil}
@@ -264,7 +264,7 @@ export function CourseManager({
                   checked={form.published}
                   onChange={(e) => setForm({ ...form, published: e.target.checked })}
                 />
-                <span className="text-sm">Published</span>
+                <span className="text-sm">Active (visible in training)</span>
               </label>
             </div>
             <div className="mt-6 flex gap-3">

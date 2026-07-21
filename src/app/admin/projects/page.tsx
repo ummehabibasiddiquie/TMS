@@ -17,12 +17,14 @@ export default async function AdminProjectsPage() {
         },
       },
       assignments: {
+        where: { user: { active: true } },
         include: {
           user: {
             select: {
               id: true,
               name: true,
               email: true,
+              active: true,
             },
           },
         },

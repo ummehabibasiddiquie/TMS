@@ -110,11 +110,15 @@ export async function GET(req: Request) {
     },
   });
 
-  const projects = assignments.map((a: any) => ({
-    ...a.project,
-    assignmentStatus: a.status,
-    assignedAt: a.assignedAt,
-  }));
+  const projects = assignments
+    .map((a: any) => ({
+      ...a.project,
+      assignmentStatus: a.status,
+      assignedAt: a.assignedAt,
+    }))
+    .filter(
+      (p: any) => p && p.active === true && p.status === "ACTIVE"
+    );
 
   return NextResponse.json({ projects });
 }
@@ -153,6 +157,7 @@ export async function POST(req: Request) {
       resources: resources?.trim() || null,
       documentation: documentation?.trim() || null,
       url: url?.trim() || null,
+      active: (status || "ACTIVE") === "ACTIVE" && active !== false,
       createdBy: user.id,
     },
     include: {

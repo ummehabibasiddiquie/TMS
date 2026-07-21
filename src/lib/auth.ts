@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
 import type { Role } from "@/types";
@@ -14,11 +13,14 @@ export type SessionUser = {
   sessionId?: string;
 };
 
+/** Lazy-load bcrypt so session/API routes don't depend on a webpack vendor chunk. */
 export async function hashPassword(password: string) {
+  const bcrypt = (await import("bcryptjs")).default;
   return bcrypt.hash(password, 12);
 }
 
 export async function verifyPassword(password: string, hash: string) {
+  const bcrypt = (await import("bcryptjs")).default;
   return bcrypt.compare(password, hash);
 }
 
@@ -39,15 +41,36 @@ export async function destroySession() {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!userId) return null;
+  try {
+    const cookieStore = await cookies();
+    if (!cookieStore || typeof cookieStore.get !== "function") return null;
+    const userId = cookieStore.get(SESSION_COOKIE)?.value;
+    if (!userId) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, name: true, role: true, employeeId: true },
-  });
-  return user ? { ...user, role: user.role as Role, sessionId: userId } : null;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        employeeId: true,
+        active: true,
+      },
+    });
+    if (!user || !user.active) return null;
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as Role,
+      employeeId: user.employeeId,
+      sessionId: userId,
+    };
+  } catch (error) {
+    console.error("getSession error:", error);
+    return null;
+  }
 }
 
 export async function requireSession(roles?: Role[]) {

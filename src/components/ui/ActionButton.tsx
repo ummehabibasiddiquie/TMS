@@ -25,7 +25,12 @@ export function ActionButton({
 
   return (
     <button
-      onClick={onClick}
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
       disabled={disabled}
       className={`p-1.5 rounded transition-colors ${variantStyles[variant]} ${
         disabled ? "opacity-50 cursor-not-allowed" : ""

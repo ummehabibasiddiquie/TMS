@@ -8,6 +8,10 @@ export async function GET(req: Request) {
 
   try {
     const assignments = await prisma.projectAssignment.findMany({
+      where: {
+        user: { active: true },
+        project: { active: true, status: "ACTIVE" },
+      },
       select: {
         userId: true,
         projectId: true,

@@ -13,6 +13,7 @@ import {
   BarChart2,
 } from "lucide-react";
 import { ProgressRing } from "@/components/learning/ProgressRing";
+import { LessonQuizExam } from "@/components/learning/LessonQuizExam";
 import { cn } from "@/lib/utils";
 
 type Topic = {
@@ -30,13 +31,20 @@ type Question = {
   correct: string;
 };
 
+type LessonQuiz = {
+  id: string;
+  title: string;
+  passingScore: number;
+  questions: Question[];
+};
+
 type Lesson = {
   id: string;
   title: string;
   lessonType: string;
   moduleTitle?: string;
   topics: Topic[];
-  quiz?: { id: string; title: string; passingScore: number; questions: Question[] } | null;
+  quizzes?: LessonQuiz[];
   assignment?: { id: string; title: string; instructions: string | null } | null;
 };
 
@@ -45,6 +53,7 @@ type Props = {
   lessons: Lesson[];
   activeLessonId?: string;
   progress: { lessonId: string; completed: boolean; watchPercent: number; quizPassed?: boolean }[];
+  passedQuizIds?: string[];
   initialNote: string;
   discussions: { id: string; content: string; user: { name: string }; createdAt: Date }[];
   enrollmentPercent: number;
@@ -56,6 +65,7 @@ export function CoursePlayer({
   lessons,
   activeLessonId,
   progress,
+  passedQuizIds: initialPassedQuizIds = [],
   initialNote,
   discussions: initialDiscussions,
   enrollmentPercent,
@@ -69,8 +79,13 @@ export function CoursePlayer({
   const [note, setNote] = useState(initialNote);
   const [discussions, setDiscussions] = useState(initialDiscussions);
   const [newComment, setNewComment] = useState("");
-  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
-  const [quizResult, setQuizResult] = useState<{ score: number; passed: boolean } | null>(null);
+  const [quizResults, setQuizResults] = useState<
+    Record<string, { score: number; passed: boolean }>
+  >({});
+  const [submittingQuizId, setSubmittingQuizId] = useState<string | null>(null);
+  const [passedQuizIds, setPassedQuizIds] = useState<Set<string>>(
+    () => new Set(initialPassedQuizIds)
+  );
   const [rightTab, setRightTab] = useState<"notes" | "progress" | "resources" | "discussion">("notes");
   const [expandedModules, setExpandedModules] = useState<Set<string>>(
     new Set(course.modules.map((m) => m.id))
@@ -80,6 +95,7 @@ export function CoursePlayer({
   const activeIndex = lessons.findIndex((l) => l.id === activeId);
   const prevLesson = lessons[activeIndex - 1];
   const nextLesson = lessons[activeIndex + 1];
+  const lessonQuizzes = activeLesson?.quizzes ?? [];
 
   const updateProgress = useCallback(
     async (data: Record<string, unknown>) => {
@@ -107,7 +123,22 @@ export function CoursePlayer({
   );
 
   async function markComplete() {
+    if (!activeLesson) return;
+    const quizzes = activeLesson.quizzes ?? [];
+    const allPassed =
+      quizzes.length === 0 || quizzes.every((q) => passedQuizIds.has(q.id));
+    // Content + quizzes: first mark content done (unlock quizzes). Stay on lesson for the quiz.
+    if (quizzes.length > 0 && !allPassed) {
+      await updateProgress({ completed: false, watchPercent: 100 });
+      return;
+    }
     await updateProgress({ completed: true, watchPercent: 100 });
+    // Fully done — move to the next lesson (or back to courses if this was the last)
+    if (nextLesson) {
+      navigateLesson(nextLesson.id);
+    } else {
+      router.push("/trainee/training");
+    }
   }
 
   async function saveNote() {
@@ -131,36 +162,83 @@ export function CoursePlayer({
     setNewComment("");
   }
 
-  async function submitQuiz() {
-    if (!activeLesson?.quiz) return;
-    const res = await fetch("/api/quiz/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quizId: activeLesson.quiz.id, answers: quizAnswers }),
-    });
-    const data = await res.json();
-    setQuizResult({ score: data.score, passed: data.passed });
-    if (data.courseProgress !== undefined) setCoursePercent(data.courseProgress);
-    router.refresh();
+  async function submitQuiz(quizId: string, answers: Record<string, string>) {
+    if (!activeLesson) return;
+    setSubmittingQuizId(quizId);
+    try {
+      const res = await fetch("/api/quiz/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId, answers }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || `Quiz submit failed (${res.status}). Please try again.`);
+        return;
+      }
+      setQuizResults((prev) => ({
+        ...prev,
+        [quizId]: { score: data.score, passed: data.passed },
+      }));
+      if (Array.isArray(data.passedQuizIds)) {
+        setPassedQuizIds(new Set(data.passedQuizIds));
+      } else if (data.passed) {
+        setPassedQuizIds((prev) => new Set([...prev, quizId]));
+      }
+      setLocalProgress((prev) => ({
+        ...prev,
+        [activeLesson.id]: {
+          ...prev[activeLesson.id],
+          lessonId: activeLesson.id,
+          watchPercent: prev[activeLesson.id]?.watchPercent ?? 100,
+          quizPassed: Boolean(data.allPassed),
+          completed: Boolean(data.allPassed),
+        },
+      }));
+      if (data.courseProgress !== undefined) setCoursePercent(data.courseProgress);
+      if (data.allPassed) {
+        if (nextLesson) {
+          navigateLesson(nextLesson.id);
+        } else {
+          router.push("/trainee/training");
+        }
+        return;
+      }
+      router.refresh();
+    } finally {
+      setSubmittingQuizId(null);
+    }
   }
 
   function navigateLesson(id: string) {
     setActiveId(id);
-    setQuizResult(null);
-    setQuizAnswers({});
     router.push(`/trainee/courses/${course.id}/player?lesson=${id}`);
   }
 
   if (!activeLesson) return <p>No lessons in this course.</p>;
 
   const lp = localProgress[activeLesson.id];
-  const topic = activeLesson.topics[0];
+  // Only quizzes attached to THIS lesson (other lessons' quizzes never show here)
+  const hasQuiz = lessonQuizzes.length > 0;
+  const allQuizzesPassed =
+    !hasQuiz || lessonQuizzes.every((q) => passedQuizIds.has(q.id));
+  // Unlock only when THIS lesson's content is done — not because another lesson was completed
+  const contentDone =
+    activeLesson.lessonType === "QUIZ" || (lp?.watchPercent ?? 0) >= 90;
+  const quizUnlocked =
+    hasQuiz && (activeLesson.lessonType === "QUIZ" || contentDone);
+  const markLabel =
+    hasQuiz && !allQuizzesPassed
+      ? contentDone
+        ? `Complete ${lessonQuizzes.length} quiz${lessonQuizzes.length !== 1 ? "zes" : ""} below`
+        : "Mark Content Complete"
+      : "Mark Complete";
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       <div className="mb-4 flex items-center justify-between">
-        <Link href="/trainee/courses" className="text-sm text-slate-400 hover:text-white">
-          ← Back to courses
+        <Link href="/trainee/training" className="text-sm text-slate-400 hover:text-white">
+          ← Today&apos;s Work
         </Link>
         <h1 className="text-lg font-semibold">{course.title}</h1>
         <ProgressRing percent={coursePercent} size={56} />
@@ -208,6 +286,13 @@ export function CoursePlayer({
                               <Check className="h-3 w-3 text-emerald-400" />
                             )}
                             {lesson.title}
+                            {(lesson.quizzes?.length ?? 0) > 0 && (
+                              <span className="ml-auto rounded bg-violet-600/20 px-1 text-[10px] text-violet-300">
+                                {lesson.quizzes!.length > 1
+                                  ? `${lesson.quizzes!.length} Quizzes`
+                                  : "Quiz"}
+                              </span>
+                            )}
                           </span>
                         </button>
                       </li>
@@ -225,60 +310,6 @@ export function CoursePlayer({
             <h2 className="text-2xl font-bold">{activeLesson.title}</h2>
             <p className="text-sm text-slate-500">{activeLesson.moduleTitle}</p>
 
-            {activeLesson.lessonType === "QUIZ" && activeLesson.quiz && (
-              <div className="mt-6 space-y-6">
-                <h3 className="text-lg font-semibold">{activeLesson.quiz.title}</h3>
-                {quizResult ? (
-                  <div
-                    className={cn(
-                      "rounded-xl p-6",
-                      quizResult.passed ? "bg-emerald-900/30" : "bg-red-900/30"
-                    )}
-                  >
-                    <p className="text-xl font-bold">
-                      Score: {Math.round(quizResult.score)}%
-                    </p>
-                    <p>{quizResult.passed ? "Passed!" : "Try again"}</p>
-                  </div>
-                ) : (
-                  activeLesson.quiz.questions.map((q) => {
-                    const opts = JSON.parse(q.options) as string[];
-                    return (
-                      <div key={q.id} className="rounded-xl bg-slate-800/40 p-4">
-                        <p className="font-medium">{q.question}</p>
-                        <div className="mt-3 space-y-2">
-                          {opts.map((opt) => (
-                            <label
-                              key={opt}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-700/50"
-                            >
-                              <input
-                                type="radio"
-                                name={q.id}
-                                checked={quizAnswers[q.id] === opt}
-                                onChange={() =>
-                                  setQuizAnswers({ ...quizAnswers, [q.id]: opt })
-                                }
-                              />
-                              {opt}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                {!quizResult && (
-                  <button
-                    onClick={submitQuiz}
-                    className="rounded-xl bg-blue-600 px-6 py-2 hover:bg-blue-500"
-                  >
-                    Submit Quiz
-                  </button>
-                )}
-              </div>
-            )}
-
             {activeLesson.lessonType === "ASSIGNMENT" && activeLesson.assignment && (
               <div className="mt-6 rounded-xl bg-slate-800/40 p-6">
                 <h3 className="font-semibold">{activeLesson.assignment.title}</h3>
@@ -294,60 +325,125 @@ export function CoursePlayer({
               </div>
             )}
 
-            {activeLesson.lessonType === "CONTENT" && topic && (
-              <div className="mt-6">
-                {topic.contentType === "VIDEO" && topic.contentUrl && (
-                  <div className="aspect-video overflow-hidden rounded-xl bg-black">
-                    <iframe
-                      src={topic.contentUrl}
-                      className="h-full w-full"
-                      allowFullScreen
-                      title={topic.title}
+            {(activeLesson.lessonType === "CONTENT" ||
+              (activeLesson.lessonType !== "QUIZ" &&
+                activeLesson.lessonType !== "ASSIGNMENT")) && (
+              <div className="mt-6 space-y-6">
+                {activeLesson.topics.length === 0 ? (
+                  <p className="text-sm text-slate-400">
+                    {hasQuiz
+                      ? "Review this lesson, then mark content complete to unlock the quiz."
+                      : "No content topics yet."}
+                  </p>
+                ) : (
+                  activeLesson.topics.map((topic) => (
+                    <div key={topic.id}>
+                      {topic.contentType === "VIDEO" && topic.contentUrl && (
+                        <div className="aspect-video overflow-hidden rounded-xl bg-black">
+                          <iframe
+                            src={topic.contentUrl}
+                            className="h-full w-full"
+                            allowFullScreen
+                            title={topic.title}
+                          />
+                        </div>
+                      )}
+                      {(topic.contentType === "PDF" ||
+                        topic.contentType === "SOP" ||
+                        topic.contentType === "PPRT" ||
+                        topic.contentType === "DOCUMENT" ||
+                        topic.contentType === "TEXT") && (
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
+                          <span className="mb-2 inline-block rounded bg-blue-600/20 px-2 py-0.5 text-xs text-blue-300">
+                            {topic.contentType}
+                          </span>
+                          <h3 className="text-lg font-semibold">{topic.title}</h3>
+                          <pre className="mt-4 whitespace-pre-wrap font-sans text-sm text-slate-300">
+                            {topic.contentBody}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+                {activeLesson.topics.some((t) => t.contentType === "VIDEO") && (
+                  <div>
+                    <label className="text-sm text-slate-400">Video progress</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={lp?.watchPercent ?? 0}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        setLocalProgress((prev) => ({
+                          ...prev,
+                          [activeLesson.id]: {
+                            ...prev[activeLesson.id],
+                            lessonId: activeLesson.id,
+                            watchPercent: v,
+                            completed: prev[activeLesson.id]?.completed ?? false,
+                          },
+                        }));
+                      }}
+                      onMouseUp={(e) =>
+                        updateProgress({
+                          watchPercent: parseInt((e.target as HTMLInputElement).value),
+                          timeSpentSec: 60,
+                        })
+                      }
+                      className="mt-2 w-full"
                     />
                   </div>
                 )}
-                {(topic.contentType === "PDF" ||
-                  topic.contentType === "SOP" ||
-                  topic.contentType === "PPRT" ||
-                  topic.contentType === "DOCUMENT") && (
-                  <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
-                    <span className="mb-2 inline-block rounded bg-blue-600/20 px-2 py-0.5 text-xs text-blue-300">
-                      {topic.contentType}
-                    </span>
-                    <h3 className="text-lg font-semibold">{topic.title}</h3>
-                    <pre className="mt-4 whitespace-pre-wrap font-sans text-sm text-slate-300">
-                      {topic.contentBody}
-                    </pre>
-                  </div>
-                )}
-                <div className="mt-4">
-                  <label className="text-sm text-slate-400">Video progress</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={lp?.watchPercent ?? 0}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      setLocalProgress((prev) => ({
-                        ...prev,
-                        [activeLesson.id]: {
-                          ...prev[activeLesson.id],
-                          lessonId: activeLesson.id,
-                          watchPercent: v,
-                          completed: false,
-                        },
-                      }));
-                    }}
-                    onMouseUp={(e) =>
-                      updateProgress({
-                        watchPercent: parseInt((e.target as HTMLInputElement).value),
-                        timeSpentSec: 60,
-                      })
-                    }
-                    className="mt-2 w-full"
-                  />
+              </div>
+            )}
+
+            {hasQuiz && !quizUnlocked && (
+              <div className="mt-8 rounded-xl border border-dashed border-violet-500/40 bg-violet-950/20 p-6 text-center">
+                <p className="font-medium text-violet-200">
+                  {lessonQuizzes.length > 1 ? "Quizzes locked" : "Quiz locked"}
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                  Finish <span className="text-slate-200">{activeLesson.title}</span>{" "}
+                  content first. Only this lesson&apos;s quiz unlocks here — not
+                  quizzes from other lessons.
+                </p>
+              </div>
+            )}
+
+            {quizUnlocked && (
+              <div className="mt-8 space-y-6 border-t border-slate-700 pt-8">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Lesson quiz
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Complete each quiz for this lesson. Questions appear one at a time.
+                  </p>
                 </div>
+                {lessonQuizzes.map((quiz, qi) => {
+                  const passed = passedQuizIds.has(quiz.id);
+                  const result = quizResults[quiz.id] ?? null;
+                  return (
+                    <LessonQuizExam
+                      key={quiz.id}
+                      quiz={quiz}
+                      indexLabel={`Quiz ${qi + 1} of ${lessonQuizzes.length}`}
+                      passed={passed}
+                      result={result}
+                      submitting={submittingQuizId === quiz.id}
+                      onSubmit={submitQuiz}
+                      onRetake={() => {
+                        setQuizResults((prev) => {
+                          const next = { ...prev };
+                          delete next[quiz.id];
+                          return next;
+                        });
+                      }}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -364,10 +460,11 @@ export function CoursePlayer({
             </button>
             <button
               onClick={markComplete}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2 text-sm font-medium hover:bg-emerald-500"
+              disabled={hasQuiz && contentDone && !allQuizzesPassed}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2 text-sm font-medium hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Check className="h-4 w-4" />
-              Mark Complete
+              {markLabel}
             </button>
             <button
               disabled={!nextLesson}

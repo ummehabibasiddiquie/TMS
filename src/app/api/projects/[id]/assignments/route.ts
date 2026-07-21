@@ -59,13 +59,14 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const assignments = await prisma.projectAssignment.findMany({
-    where: { projectId: params.id },
+    where: { projectId: params.id, user: { active: true } },
     include: {
       user: {
         select: {
           id: true,
           name: true,
           email: true,
+          active: true,
         },
       },
       assigner: {

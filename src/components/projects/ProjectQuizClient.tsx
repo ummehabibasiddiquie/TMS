@@ -11,46 +11,60 @@ export type CertificationQuestion = {
   correctIndex: number;
 };
 
-export function ProjectQuizClient({ 
-  questions, 
-  projectId, 
-  projectName 
-}: { 
+export function ProjectQuizClient({
+  questions,
+  projectId,
+  projectName,
+}: {
   questions: CertificationQuestion[];
   projectId: string;
   projectName: string;
 }) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const answeredCount = Object.keys(answers).length;
   const allAnswered = answeredCount === questions.length;
   const score = useMemo(
-    () => questions.reduce((total, question, index) => total + (answers[index] === question.correctIndex ? 1 : 0), 0),
+    () =>
+      questions.reduce(
+        (total, question, index) =>
+          total + (answers[index] === question.correctIndex ? 1 : 0),
+        0
+      ),
     [answers, questions]
   );
-  const passed = score / questions.length >= 0.8;
+  const scorePercent = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+  const passed = scorePercent >= 80;
 
   const handleSubmit = async () => {
-    // Save quiz attempt to database
+    setSubmitting(true);
+    setSaveError(null);
+    // Always show results so the employee sees their score
+    setSubmitted(true);
+
     try {
-      const response = await fetch('/api/quiz/attempt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/quiz/attempt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
           score,
           passed,
           answers,
-          totalQuestions: questions.length
+          totalQuestions: questions.length,
         }),
       });
-      if (response.ok) {
-        setSubmitted(true);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSaveError(data.error || "Could not save your attempt. Your score is shown below.");
       }
     } catch (error) {
-      console.error('Failed to submit quiz:', error);
-      // Still show results even if save fails
-      setSubmitted(true);
+      console.error("Failed to submit quiz:", error);
+      setSaveError("Could not save your attempt. Your score is shown below.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -59,13 +73,28 @@ export function ProjectQuizClient({
       <div className="space-y-6">
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
           <Award className={cn("h-10 w-10", passed ? "text-emerald-300" : "text-amber-300")} />
-          <h2 className="mt-4 text-2xl font-bold text-white">{passed ? "Certification earned" : "Retake recommended"}</h2>
-          <p className="mt-2 text-slate-400">
-            You scored {score} / {questions.length}. {passed ? `Your ${projectName} badge is ready.` : "Review the explanations and try again."}
+          <h2 className="mt-4 text-2xl font-bold text-white">
+            {passed ? "Quiz passed — pending approval" : "Retake recommended"}
+          </h2>
+          <p className="mt-3 text-3xl font-bold text-white">
+            {scorePercent}%
+            <span className="ml-2 text-lg font-normal text-slate-400">
+              ({score} / {questions.length} correct)
+            </span>
           </p>
+          <p className="mt-2 text-slate-400">
+            {passed
+              ? `You scored 80%+. Your ${projectName} certificate is waiting for Admin or Team Lead approval.`
+              : "You need 80% or higher. Review the answers below and try again."}
+          </p>
+          {saveError && <p className="mt-3 text-sm text-amber-300">{saveError}</p>}
+          {submitting && <p className="mt-2 text-sm text-slate-500">Saving your result…</p>}
           <div className="mt-5 flex flex-wrap gap-3">
             {passed && (
-              <Link href="/certifications" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white">
+              <Link
+                href="/certifications"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+              >
                 View Certifications
               </Link>
             )}
@@ -74,6 +103,7 @@ export function ProjectQuizClient({
               onClick={() => {
                 setSubmitted(false);
                 setAnswers({});
+                setSaveError(null);
               }}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200"
             >
@@ -85,8 +115,16 @@ export function ProjectQuizClient({
 
         {questions.map((question, index) => (
           <div key={question.question} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
-            <p className="font-semibold text-white">Q{index + 1}. {question.question}</p>
+            <p className="font-semibold text-white">
+              Q{index + 1}. {question.question}
+            </p>
             <p className="mt-2 text-sm text-slate-400">
+              Your answer:{" "}
+              {answers[index] != null
+                ? question.options[answers[index]]
+                : "—"}
+            </p>
+            <p className="mt-1 text-sm text-emerald-400/90">
               Correct answer: {question.options[question.correctIndex]}
             </p>
           </div>
@@ -111,8 +149,12 @@ export function ProjectQuizClient({
 
       {questions.map((question, index) => (
         <div key={question.question} className="rounded-lg border border-slate-800 bg-slate-900 p-5">
-          <p className="text-sm font-medium text-blue-300">Question {index + 1} of {questions.length}</p>
-          <h2 className="mt-2 font-semibold text-white">Q{index + 1}. {question.question}</h2>
+          <p className="text-sm font-medium text-blue-300">
+            Question {index + 1} of {questions.length}
+          </p>
+          <h2 className="mt-2 font-semibold text-white">
+            Q{index + 1}. {question.question}
+          </h2>
           <div className="mt-4 grid gap-3">
             {question.options.map((option, optionIndex) => (
               <button
@@ -135,11 +177,15 @@ export function ProjectQuizClient({
 
       <button
         type="button"
-        disabled={!allAnswered}
+        disabled={!allAnswered || submitting}
         onClick={handleSubmit}
         className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {allAnswered ? "Submit All Answers" : `Answer ${questions.length - answeredCount} more to submit`}
+        {submitting
+          ? "Submitting…"
+          : allAnswered
+            ? "Submit All Answers"
+            : `Answer ${questions.length - answeredCount} more to submit`}
       </button>
     </div>
   );

@@ -14,7 +14,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       description: description !== undefined ? description?.trim() || null : undefined,
       durationMin: durationMin ?? undefined,
     },
-    include: { topics: true, quiz: true, assignment: true },
+    include: { topics: true, quizzes: true, assignment: true },
   });
   return NextResponse.json({ lesson });
 }

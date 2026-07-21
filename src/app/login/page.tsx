@@ -1,22 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, GraduationCap } from "lucide-react";
 import Link from "next/link";
 import type { Role } from "@/types";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
 const ROLE_HOME: Record<Role, string> = {
-  TRAINEE: "/",
+  TRAINEE: "/trainee/training",
   TRAINER: "/",
   ADMIN: "/",
   TEAM_LEAD: "/",
-  EMPLOYEE: "/",
+  EMPLOYEE: "/trainee/training",
 };
 
-export default function LoginPage() {
+function safeNextPath(next: string | null, role: Role) {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return ROLE_HOME[role] || "/";
+  }
+  if (role === "TRAINEE" || role === "EMPLOYEE") {
+    if (next.startsWith("/admin") || next.startsWith("/trainer")) {
+      return ROLE_HOME[role];
+    }
+  }
+  return next;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -46,7 +59,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push(ROLE_HOME[data.user.role as Role] || "/");
+    const role = data.user.role as Role;
+    router.push(safeNextPath(searchParams.get("next"), role));
     router.refresh();
   }
 
@@ -120,5 +134,19 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -9,7 +9,7 @@ export async function recalculateCourseProgress(userId: string, courseId: string
         include: {
           lessons: {
             orderBy: { order: "asc" },
-            include: { quiz: true, assignment: true },
+            include: { quizzes: true, assignment: true },
           },
         },
       },
@@ -21,6 +21,20 @@ export async function recalculateCourseProgress(userId: string, courseId: string
   const lessonIds = course.modules.flatMap((m) => m.lessons.map((l) => l.id));
   if (lessonIds.length === 0) return 0;
 
+  const allQuizIds = course.modules.flatMap((m) =>
+    m.lessons.flatMap((l) => l.quizzes.map((q) => q.id))
+  );
+  const passedAttempts =
+    allQuizIds.length > 0
+      ? await prisma.quizAttempt.findMany({
+          where: { userId, quizId: { in: allQuizIds }, passed: true },
+          select: { quizId: true },
+        })
+      : [];
+  const passedQuizIds = new Set(
+    passedAttempts.map((a) => a.quizId).filter(Boolean) as string[]
+  );
+
   const progress = await prisma.lessonProgress.findMany({
     where: { userId, lessonId: { in: lessonIds } },
   });
@@ -28,35 +42,91 @@ export async function recalculateCourseProgress(userId: string, courseId: string
 
   const rule = course.completionRules[0];
   const minWatch = rule?.minWatchPercent ?? 90;
-  const requireQuiz = rule?.requireQuizPass ?? true;
 
-  let completedCount = 0;
+  let earned = 0;
   for (const lesson of course.modules.flatMap((m) => m.lessons)) {
     const lp = progressMap.get(lesson.id);
     if (!lp) continue;
 
-    let done = lp.completed;
-    if (!done && rule?.requireAllLessons !== false) {
-      const watchOk = lp.watchPercent >= minWatch || lesson.lessonType !== "CONTENT";
-      const quizOk =
-        !requireQuiz ||
-        !lesson.quiz ||
-        lp.quizPassed ||
-        lesson.lessonType !== "QUIZ";
-      const assignOk =
-        !lesson.assignment || lp.assignmentDone || lesson.lessonType !== "ASSIGNMENT";
-      done = watchOk && quizOk && assignOk;
-      if (done) {
-        await prisma.lessonProgress.update({
-          where: { id: lp.id },
-          data: { completed: true, completedAt: new Date() },
-        });
-      }
+    const hasQuizzes = lesson.quizzes.length > 0;
+    const allQuizzesPassed =
+      !hasQuizzes || lesson.quizzes.every((q) => passedQuizIds.has(q.id));
+
+    // If they finished this lesson before a quiz was added, keep content credit
+    // (watch/progress) and only reopen full "completed" until quizzes are passed.
+    if (hasQuizzes && !allQuizzesPassed && lp.completed) {
+      await prisma.lessonProgress.update({
+        where: { id: lp.id },
+        data: {
+          completed: false,
+          completedAt: null,
+          quizPassed: false,
+          watchPercent: Math.max(lp.watchPercent, 100),
+        },
+      });
+      lp.completed = false;
+      lp.quizPassed = false;
+      lp.watchPercent = Math.max(lp.watchPercent, 100);
+    } else if (hasQuizzes && lp.quizPassed !== allQuizzesPassed) {
+      await prisma.lessonProgress.update({
+        where: { id: lp.id },
+        data: {
+          quizPassed: allQuizzesPassed,
+          ...(allQuizzesPassed
+            ? {}
+            : { completed: false, completedAt: null }),
+        },
+      });
+      lp.quizPassed = allQuizzesPassed;
+      if (!allQuizzesPassed) lp.completed = false;
     }
-    if (done) completedCount++;
+
+    const contentDone =
+      lesson.lessonType === "QUIZ"
+        ? true
+        : lesson.lessonType === "ASSIGNMENT"
+          ? Boolean(lp.assignmentDone)
+          : lp.watchPercent >= minWatch;
+
+    let lessonScore = 0;
+    let fullyDone = false;
+
+    if (hasQuizzes) {
+      // Partial credit: content half + quiz half (split across quizzes if multiple)
+      if (contentDone) lessonScore += 0.5;
+      const passedCount = lesson.quizzes.filter((q) => passedQuizIds.has(q.id)).length;
+      lessonScore += 0.5 * (passedCount / lesson.quizzes.length);
+      fullyDone = contentDone && allQuizzesPassed;
+    } else {
+      fullyDone =
+        lp.completed ||
+        (rule?.requireAllLessons !== false &&
+          (lp.watchPercent >= minWatch || lesson.lessonType !== "CONTENT") &&
+          (!lesson.assignment || lp.assignmentDone || lesson.lessonType !== "ASSIGNMENT"));
+      lessonScore = fullyDone ? 1 : 0;
+    }
+
+    if (fullyDone && !lp.completed) {
+      await prisma.lessonProgress.update({
+        where: { id: lp.id },
+        data: {
+          completed: true,
+          completedAt: new Date(),
+          quizPassed: hasQuizzes ? true : lp.quizPassed,
+          watchPercent: Math.max(lp.watchPercent, hasQuizzes ? lp.watchPercent : 100),
+        },
+      });
+    } else if (!fullyDone && lp.completed) {
+      await prisma.lessonProgress.update({
+        where: { id: lp.id },
+        data: { completed: false, completedAt: null },
+      });
+    }
+
+    earned += lessonScore;
   }
 
-  const percent = (completedCount / lessonIds.length) * 100;
+  const percent = (earned / lessonIds.length) * 100;
   const status =
     percent >= 100 ? "COMPLETED" : percent > 0 ? "IN_PROGRESS" : "NOT_STARTED";
 
@@ -74,34 +144,37 @@ export async function recalculateCourseProgress(userId: string, courseId: string
       progressPercent: percent,
       status,
       lastActivityAt: new Date(),
-      completedAt: percent >= 100 ? new Date() : undefined,
+      completedAt: percent >= 100 ? new Date() : null,
     },
   });
 
   return percent;
 }
 
-export async function isDayLearningComplete(userId: string, dayNumber: number) {
-  const requirements = await prisma.dayRequiredLearning.findMany({
-    where: { dayId: dayNumber, required: true },
-    include: { lesson: true, course: true },
+/** Recalculate progress for every learner enrolled in a course (e.g. after quiz added). */
+export async function recalculateCourseProgressForEnrollments(courseId: string) {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { courseId },
+    select: { userId: true },
   });
-  if (requirements.length === 0) return true;
-
-  for (const req of requirements) {
-    if (req.lessonId) {
-      const lp = await prisma.lessonProgress.findUnique({
-        where: { userId_lessonId: { userId, lessonId: req.lessonId } },
-      });
-      if (!lp?.completed) return false;
-    } else if (req.courseId) {
-      const en = await prisma.enrollment.findUnique({
-        where: { userId_courseId: { userId, courseId: req.courseId } },
-      });
-      if (!en || en.progressPercent < 100) return false;
-    }
+  for (const en of enrollments) {
+    await recalculateCourseProgress(en.userId, courseId);
   }
-  return true;
+  return enrollments.length;
+}
+
+/** Recalculate all enrollments for one user (keeps % in sync when content/quizzes change). */
+export async function recalculateUserEnrollments(userId: string) {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId },
+    select: { courseId: true },
+  });
+  const results: { courseId: string; percent: number }[] = [];
+  for (const en of enrollments) {
+    const percent = await recalculateCourseProgress(userId, en.courseId);
+    results.push({ courseId: en.courseId, percent });
+  }
+  return results;
 }
 
 export async function updateLearningStreak(userId: string) {

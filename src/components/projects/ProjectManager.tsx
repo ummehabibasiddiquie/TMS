@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, X, Users, Calendar, Link as LinkIcon, FileText, FolderKanban, UserPlus } from "lucide-react";
+import { Pencil, Trash2, X, FolderKanban } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type Project = {
@@ -38,11 +38,6 @@ type Project = {
   };
 };
 
-type Category = {
-  id: string;
-  name: string;
-};
-
 type User = {
   id: string;
   name: string;
@@ -53,13 +48,12 @@ type User = {
 export function ProjectManager({ projects: initial, user }: { projects: Project[]; user: User }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initial);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
-    categoryId: "",
+    categoryId: "" as string,
     status: "ACTIVE",
     startDate: "",
     endDate: "",
@@ -72,26 +66,13 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [statusFilter, setStatusFilter] = useState("All Status");
-
-  // Fetch categories on mount
-  useEffect(() => {
-    fetch("/api/project-categories?dropdown=true")
-      .then((res) => res.json())
-      .then((data) => setCategories(data))
-      .catch((err) => console.error("Failed to fetch categories:", err));
-  }, []);
 
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
       searchQuery === "" ||
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    const matchesCategory =
-      categoryFilter === "All Categories" ||
-      categoryFilter === (project.categoryRel?.name || "Uncategorized");
 
     const matchesStatus =
       statusFilter === "All Status" ||
@@ -100,12 +81,11 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
       (statusFilter === "Completed" && project.status === "COMPLETED") ||
       (statusFilter === "On Hold" && project.status === "ON_HOLD");
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
   function clearFilters() {
     setSearchQuery("");
-    setCategoryFilter("All Categories");
     setStatusFilter("All Status");
   }
 
@@ -217,8 +197,11 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
     <div className="w-full space-y-8">
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Manage Projects</p>
-        <h1 className="mt-3 text-3xl font-bold text-white">Create, edit, and assign projects</h1>
-        <p className="mt-2 text-slate-400">Manage project assignments and track team progress.</p>
+        <h1 className="mt-3 text-3xl font-bold text-white">Create and manage projects</h1>
+        <p className="mt-2 text-slate-400">
+          Projects can be referenced on day-wise curriculum days. Training work is scheduled there —
+          no separate employee assign needed.
+        </p>
       </div>
 
       <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
@@ -230,18 +213,6 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
               onChange={(e) => setSearchQuery(e.target.value)}
               className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 flex-1"
             />
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
-            >
-              <option>All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -280,8 +251,8 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
             <table className="w-full min-w-[850px] text-left text-sm">
               <thead className="text-slate-500">
                 <tr className="border-b border-slate-800">
-                  {["Project", "Category", "Active", "Status", "Priority", "Assigned", ""].map((header) => (
-                    <th key={header} className="py-3 font-medium">{header}</th>
+                  {["Project", "Active", "Status", "Priority", ""].map((header) => (
+                    <th key={header || "actions"} className="py-3 font-medium">{header}</th>
                   ))}
                 </tr>
               </thead>
@@ -289,7 +260,6 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
                 {filteredProjects.map((project) => (
                   <tr key={project.id} className="border-b border-slate-800/70 text-slate-300">
                     <td className="py-3 font-medium text-white">{project.name}</td>
-                    <td className="py-3">{project.categoryRel?.name || "Uncategorized"}</td>
                     <td className="py-3">
                       <span
                         className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium border ${
@@ -320,15 +290,8 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
                       </span>
                     </td>
                     <td className="py-3">{project.priority}</td>
-                    <td className="py-3">{project.assignments.length}</td>
                     <td className="py-3">
                       <div className="flex gap-1">
-                        <ActionButton
-                          icon={UserPlus}
-                          label="Assign users"
-                          onClick={() => router.push(`/projects/${project.id}`)}
-                          variant="edit"
-                        />
                         <ActionButton
                           icon={Pencil}
                           label="Edit project"
@@ -384,29 +347,22 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-slate-400">Category</label>
-                  <select
-                    value={form.categoryId}
-                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
                   <label className="text-sm text-slate-400">Status</label>
                   <select
                     value={form.status}
-                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    onChange={(e) => {
+                      const nextStatus = e.target.value;
+                      setForm({
+                        ...form,
+                        status: nextStatus,
+                        active: nextStatus === "ACTIVE",
+                      });
+                    }}
                     className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
                   >
                     <option value="ACTIVE">Active</option>
                     <option value="INACTIVE">Inactive</option>
+                    <option value="COMING_SOON">Coming Soon</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="ON_HOLD">On Hold</option>
                   </select>

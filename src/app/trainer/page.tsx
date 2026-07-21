@@ -1,49 +1,64 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { Users, BookOpen, TrendingUp, ClipboardCheck } from "lucide-react";
+import { Users, BookOpen, ClipboardCheck, CalendarDays } from "lucide-react";
+import { ACTIVE_USER, PUBLISHED_COURSE } from "@/lib/active-filters";
+import { redirect } from "next/navigation";
 
 export default async function TrainerDashboard() {
   const user = await getSession();
+  if (!user) redirect("/login");
+  if (user.role !== "TRAINER" && user.role !== "ADMIN") redirect("/");
+
   const trainees = await prisma.traineeProfile.count({
-    where: { trainerId: user?.id },
+    where: {
+      trainerId: user.id,
+      user: ACTIVE_USER,
+    },
   });
-  const courses = await prisma.course.count({ where: { published: true } });
-  const pendingReviews = await prisma.trainerReview.count({
-    where: { reviewerId: user?.id, status: "PENDING" },
-  });
-  const avgProgress = await prisma.enrollment.aggregate({
-    _avg: { progressPercent: true },
-  });
+  const courses = await prisma.course.count({ where: PUBLISHED_COURSE });
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold">Trainer Dashboard</h1>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <h1 className="text-3xl font-bold">Team Lead Overview</h1>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[
           { icon: Users, label: "My Trainees", value: trainees },
           { icon: BookOpen, label: "Published Courses", value: courses },
-          { icon: TrendingUp, label: "Avg Course Progress", value: `${Math.round(avgProgress._avg.progressPercent ?? 0)}%` },
-          { icon: ClipboardCheck, label: "Pending Reviews", value: pendingReviews },
-        ].map((s) => (
-          <div key={s.label} className="glass-panel flex items-center gap-4 p-5">
-            <s.icon className="h-8 w-8 text-blue-400" />
-            <div>
-              <p className="text-xs text-slate-500">{s.label}</p>
-              <p className="text-2xl font-bold">{s.value}</p>
+          { icon: ClipboardCheck, label: "Day Curriculum", value: "Open", href: "/admin/curriculum" },
+        ].map((s) => {
+          const Icon = s.icon;
+          const inner = (
+            <div className="glass-panel flex items-center gap-4 p-5">
+              <Icon className="h-8 w-8 text-blue-400" />
+              <div>
+                <p className="text-xs text-slate-500">{s.label}</p>
+                <p className="text-2xl font-bold">{s.value}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+          return "href" in s && s.href ? (
+            <Link key={s.label} href={s.href} className="block hover:opacity-90">
+              {inner}
+            </Link>
+          ) : (
+            <div key={s.label}>{inner}</div>
+          );
+        })}
       </div>
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
         <Link href="/trainer/courses" className="glass-panel px-6 py-4 hover:ring-2 hover:ring-blue-500">
-          Manage Courses
+          Courses
         </Link>
-        <Link href="/trainer/analytics" className="glass-panel px-6 py-4 hover:ring-2 hover:ring-blue-500">
-          View Analytics
+        <Link href="/admin/progress" className="glass-panel px-6 py-4 hover:ring-2 hover:ring-blue-500">
+          Team Progress
         </Link>
-        <Link href="/trainer/reviews" className="glass-panel px-6 py-4 hover:ring-2 hover:ring-blue-500">
-          Daily Reviews
+        <Link
+          href="/trainer/day-reviews"
+          className="glass-panel inline-flex items-center gap-2 px-6 py-4 hover:ring-2 hover:ring-blue-500"
+        >
+          <CalendarDays className="h-4 w-4" />
+          Day Reviews
         </Link>
       </div>
     </div>

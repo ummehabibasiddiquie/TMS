@@ -1,60 +1,59 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { recalculateUserEnrollments } from "@/lib/progress";
+import { getDayWisePlan } from "@/lib/day-wise-training";
 
 export async function GET() {
   const user = await requireSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    // Get all enrollments
-    const enrollments = await prisma.enrollment.findMany({
-      where: { userId: user.id },
-      include: {
-        course: {
-          include: {
-            modules: {
-              include: {
-                lessons: true,
+    await recalculateUserEnrollments(user.id);
+
+    const [dayWise, enrollments, lessonProgress, streak, achievements] = await Promise.all([
+      getDayWisePlan(user.id),
+      prisma.enrollment.findMany({
+        where: { userId: user.id },
+        include: {
+          course: {
+            include: {
+              modules: {
+                include: {
+                  lessons: true,
+                },
               },
             },
           },
         },
-      },
-    });
-
-    // Get all lesson progress
-    const lessonProgress = await prisma.lessonProgress.findMany({
-      where: { userId: user.id },
-      include: {
-        lesson: {
-          include: {
-            module: {
-              include: {
-                course: true,
+      }),
+      prisma.lessonProgress.findMany({
+        where: { userId: user.id },
+        include: {
+          lesson: {
+            include: {
+              module: {
+                include: {
+                  course: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: { completedAt: "desc" },
-    });
-
-    // Get learning streak
-    const streak = await prisma.learningStreak.findUnique({
-      where: { userId: user.id },
-    });
-
-    // Get achievements
-    const achievements = await prisma.achievement.findMany({
-      include: {
-        users: {
-          where: { userId: user.id },
+        orderBy: { completedAt: "desc" },
+      }),
+      prisma.learningStreak.findUnique({
+        where: { userId: user.id },
+      }),
+      prisma.achievement.findMany({
+        include: {
+          users: {
+            where: { userId: user.id },
+          },
         },
-      },
-    });
+      }),
+    ]);
 
-    // Calculate overall statistics
     const totalCourses = enrollments.length;
     const completedCourses = enrollments.filter((e) => e.status === "COMPLETED").length;
     const inProgressCourses = enrollments.filter((e) => e.status === "IN_PROGRESS").length;
@@ -65,13 +64,14 @@ export async function GET() {
     }, 0);
 
     const completedLessons = lessonProgress.filter((lp) => lp.completed).length;
-
     const overallProgress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
 
-    // Course-wise progress
     const courseProgress = enrollments.map((enrollment) => {
-      const totalLessons = enrollment.course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
-      const completedLessons = lessonProgress.filter((lp) =>
+      const courseTotalLessons = enrollment.course.modules.reduce(
+        (sum, m) => sum + m.lessons.length,
+        0
+      );
+      const courseCompletedLessons = lessonProgress.filter((lp) =>
         enrollment.course.modules.some((m) => m.id === lp.lesson.moduleId)
       ).length;
 
@@ -86,7 +86,10 @@ export async function GET() {
           moduleName: module.title,
           totalLessons: moduleTotalLessons,
           completedLessons: moduleCompletedLessons,
-          progress: moduleTotalLessons > 0 ? (moduleCompletedLessons / moduleTotalLessons) * 100 : 0,
+          progress:
+            moduleTotalLessons > 0
+              ? (moduleCompletedLessons / moduleTotalLessons) * 100
+              : 0,
         };
       });
 
@@ -97,14 +100,13 @@ export async function GET() {
         status: enrollment.status,
         progressPercent: enrollment.progressPercent,
         totalModules: enrollment.course.modules.length,
-        totalLessons,
-        completedLessons,
+        totalLessons: courseTotalLessons,
+        completedLessons: courseCompletedLessons,
         moduleProgress,
         lastActivityAt: enrollment.lastActivityAt,
       };
     });
 
-    // Recent activity
     const recentActivity = lessonProgress.slice(0, 10).map((lp) => ({
       lessonId: lp.lessonId,
       lessonTitle: lp.lesson.title,
@@ -116,6 +118,29 @@ export async function GET() {
     }));
 
     return NextResponse.json({
+      dayWise: {
+        source: dayWise.source,
+        currentDay: dayWise.currentDay,
+        totalDays: dayWise.totalDays,
+        plannedDays: dayWise.plannedDays,
+        overallPercent: dayWise.overallPercent,
+        readyForProduction: dayWise.readyForProduction,
+        trainingStatus: dayWise.trainingStatus,
+        todayPercent: dayWise.today?.percent ?? 0,
+        todayTitle: dayWise.today?.title ?? null,
+        todayDone: dayWise.today?.done ?? false,
+        todayCompleted: dayWise.today?.completedCount ?? 0,
+        todayTotal: dayWise.today?.totalCount ?? 0,
+        days: dayWise.allDays.map((d) => ({
+          ...d,
+          status:
+            d.dayNumber === dayWise.currentDay
+              ? "current"
+              : d.done || d.dayNumber < dayWise.currentDay
+                ? "done"
+                : "upcoming",
+        })),
+      },
       overall: {
         totalCourses,
         completedCourses,
@@ -127,14 +152,16 @@ export async function GET() {
       },
       courseProgress,
       recentActivity,
-      achievements: achievements.map((a) => ({
-        id: a.id,
-        title: a.title,
-        description: a.description,
-        icon: a.icon,
-        earned: a.users.length > 0,
-        earnedAt: a.users[0]?.earnedAt,
-      })),
+      achievements: achievements
+        .filter((a) => a.users.length > 0)
+        .map((a) => ({
+          id: a.id,
+          title: a.title,
+          description: a.description,
+          icon: a.icon,
+          earned: true,
+          earnedAt: a.users[0]?.earnedAt,
+        })),
     });
   } catch (error) {
     console.error("Error fetching trainee progress:", error);

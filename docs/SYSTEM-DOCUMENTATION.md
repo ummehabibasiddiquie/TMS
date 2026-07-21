@@ -110,7 +110,7 @@ Update **Status** when work progresses: `Done` · `Partial` · `Not started`
 | Trainer / QA reviews | Partial | `/trainer/reviews`, `/api/reviews` | |
 | Admin content studio | Done | `/admin/content` | Courses + quiz CRUD UI |
 | Admin user list | Partial | `/admin/users` | List from DB; add/edit TBD |
-| Admin progress reports | Partial | `/admin/progress` | **Mock data** — needs DB |
+| Admin progress reports | Working | `/admin/progress` | DB-backed via `/api/admin/progress-reports`; uses dynamic onboarding steps, quizzes, certifications; trainers see assigned trainees only |
 | Onboarding 5-step UI | Partial | `/onboarding` | Static `onboarding-data.ts` |
 | Projects list | Partial | `/projects` | Static project list |
 | Landscape training | Partial | `/projects/landscape/train` | Static modules; DB fallback if course exists |

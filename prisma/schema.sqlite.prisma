@@ -15,6 +15,7 @@ model User {
   name          String
   employeeId    String?  @unique
   role          String
+  active        Boolean  @default(true)
   dateOfJoining DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -113,7 +114,7 @@ model Lesson {
   lessonType     String @default("CONTENT")
   durationMin    Int?
   topics         Topic[]
-  quiz           Quiz?
+  quizzes        Quiz[]
   assignment     Assignment?
   progress       LessonProgress[]
   notes          LessonNote[]
@@ -135,10 +136,11 @@ model Topic {
 
 model Quiz {
   id           String @id @default(cuid())
-  lessonId     String @unique
+  lessonId     String
   lesson       Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   title        String
   passingScore Int    @default(70)
+  order        Int    @default(0)
   questions    QuizQuestion[]
   attempts     QuizAttempt[]
 }

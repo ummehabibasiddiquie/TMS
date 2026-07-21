@@ -1,0 +1,334 @@
+import { prisma } from "./db";
+import { getDayWisePlan } from "./day-wise-training";
+import { getEvaluationBand, type EvaluationBandInfo } from "./evaluation";
+
+export type FinalQuizQuestionPublic = {
+  id: string;
+  question: string;
+  options: string;
+  sortOrder: number;
+};
+
+export type FinalQuizState = {
+  scheduleComplete: boolean;
+  unlocked: boolean;
+  quiz: {
+    id: string;
+    title: string;
+    description: string | null;
+    passingScore: number;
+    questionCount: number;
+    questions?: FinalQuizQuestionPublic[];
+  } | null;
+  cycle: number;
+  attempted: boolean;
+  attempt: {
+    id: string;
+    score: number;
+    passed: boolean;
+    createdAt: string;
+    cycle: number;
+  } | null;
+  canSubmit: boolean;
+  band: EvaluationBandInfo;
+  message?: string;
+};
+
+async function getActiveQuiz() {
+  const client = prisma as typeof prisma & {
+    finalEvaluationQuiz?: typeof prisma.finalEvaluationQuiz;
+  };
+  if (!client.finalEvaluationQuiz) {
+    throw new Error(
+      "Prisma client is missing FinalEvaluationQuiz. Restart the dev server after running: npx prisma generate"
+    );
+  }
+  return client.finalEvaluationQuiz.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: "desc" },
+    include: {
+      questions: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+}
+
+export async function getOrCreateEvaluationCycle(userId: string): Promise<number> {
+  const profile = await prisma.traineeProfile.findUnique({
+    where: { userId },
+    select: { evaluationCycle: true },
+  });
+  if (profile) return profile.evaluationCycle ?? 1;
+
+  await prisma.traineeProfile.create({
+    data: {
+      userId,
+      trainingStarted: true,
+      trainingStatus: "IN_TRAINING",
+      evaluationCycle: 1,
+    },
+  });
+  return 1;
+}
+
+/** Trainee-facing state for the final evaluation quiz. */
+export async function getFinalQuizState(
+  userId: string,
+  opts?: { includeQuestions?: boolean }
+): Promise<FinalQuizState> {
+  const plan = await getDayWisePlan(userId);
+  const scheduleComplete =
+    plan.totalDays > 0 && plan.allDays.every((d) => d.done);
+  const cycle = await getOrCreateEvaluationCycle(userId);
+  const quiz = await getActiveQuiz();
+
+  if (!quiz) {
+    return {
+      scheduleComplete,
+      unlocked: false,
+      quiz: null,
+      cycle,
+      attempted: false,
+      attempt: null,
+      canSubmit: false,
+      band: getEvaluationBand(null),
+      message: "No final evaluation quiz is configured yet. Contact Admin.",
+    };
+  }
+
+  const attempt = await prisma.finalEvaluationAttempt.findUnique({
+    where: {
+      userId_quizId_cycle: { userId, quizId: quiz.id, cycle },
+    },
+  });
+
+  const unlocked = scheduleComplete;
+  const attempted = Boolean(attempt);
+  const canSubmit = unlocked && !attempted;
+
+  const attemptDto = attempt
+    ? {
+        id: attempt.id,
+        score: Math.round(attempt.score),
+        passed: attempt.passed,
+        createdAt: attempt.createdAt.toISOString(),
+        cycle: attempt.cycle,
+      }
+    : null;
+
+  return {
+    scheduleComplete,
+    unlocked,
+    quiz: {
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      passingScore: quiz.passingScore,
+      questionCount: quiz.questions.length,
+      questions:
+        opts?.includeQuestions && canSubmit
+          ? quiz.questions.map((q) => ({
+              id: q.id,
+              question: q.question,
+              options: q.options,
+              sortOrder: q.sortOrder,
+            }))
+          : undefined,
+    },
+    cycle,
+    attempted,
+    attempt: attemptDto,
+    canSubmit,
+    band: getEvaluationBand(attemptDto?.score ?? null),
+    message: !scheduleComplete
+      ? "Complete all day-wise training days to unlock the final evaluation quiz."
+      : attempted
+        ? "Final evaluation submitted. No retake for this cycle."
+        : undefined,
+  };
+}
+
+export async function submitFinalEvaluationQuiz(
+  userId: string,
+  answers: Record<string, string>
+) {
+  const state = await getFinalQuizState(userId, { includeQuestions: false });
+  if (!state.scheduleComplete) {
+    throw new Error("Complete all day-wise training before taking the final quiz.");
+  }
+  if (state.attempted) {
+    throw new Error("Final evaluation already submitted. Retakes are not allowed.");
+  }
+
+  const quiz = await getActiveQuiz();
+  if (!quiz || quiz.questions.length === 0) {
+    throw new Error("Final evaluation quiz is not available.");
+  }
+
+  const cycle = await getOrCreateEvaluationCycle(userId);
+
+  let correct = 0;
+  for (const q of quiz.questions) {
+    if (answers[q.id] === q.correct) correct++;
+  }
+  const score =
+    quiz.questions.length > 0 ? (correct / quiz.questions.length) * 100 : 0;
+  // No pass mark — score is the evaluation % for Admin bands only.
+  const passed = true;
+
+  try {
+    const attempt = await prisma.finalEvaluationAttempt.create({
+      data: {
+        userId,
+        quizId: quiz.id,
+        cycle,
+        score,
+        passed,
+        answers: JSON.stringify(answers),
+      },
+    });
+
+    const certificate = await prisma.finalQuizCertificate.create({
+      data: {
+        userId,
+        attemptId: attempt.id,
+        quizTitle: quiz.title,
+        score,
+        cycle,
+        status: "APPROVED",
+      },
+    });
+
+    await prisma.traineeProfile.updateMany({
+      where: { userId },
+      data: {
+        trainingStatus: "AWAITING_EVALUATION",
+        readyForProduction: false,
+      },
+    });
+
+    return {
+      id: attempt.id,
+      score: Math.round(score),
+      passed,
+      cycle,
+      band: getEvaluationBand(score),
+      certificateId: certificate.id,
+    };
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: string }).code)
+        : "";
+    if (code === "P2002") {
+      throw new Error("Final evaluation already submitted. Retakes are not allowed.");
+    }
+    throw err;
+  }
+}
+
+/** Latest final-quiz score for the trainee's current evaluation cycle. */
+export async function getTraineeEvaluationScore(userId: string): Promise<{
+  score: number | null;
+  cycle: number;
+  attemptedAt: string | null;
+  band: EvaluationBandInfo;
+  scheduleComplete: boolean;
+  quizTitle: string | null;
+}> {
+  const plan = await getDayWisePlan(userId);
+  const scheduleComplete =
+    plan.totalDays > 0 && plan.allDays.every((d) => d.done);
+  const cycle = await getOrCreateEvaluationCycle(userId);
+  const quiz = await getActiveQuiz();
+
+  if (!quiz) {
+    return {
+      score: null,
+      cycle,
+      attemptedAt: null,
+      band: getEvaluationBand(null),
+      scheduleComplete,
+      quizTitle: null,
+    };
+  }
+
+  const attempt = await prisma.finalEvaluationAttempt.findUnique({
+    where: {
+      userId_quizId_cycle: { userId, quizId: quiz.id, cycle },
+    },
+  });
+
+  const score = attempt ? Math.round(attempt.score) : null;
+  return {
+    score,
+    cycle,
+    attemptedAt: attempt?.createdAt.toISOString() ?? null,
+    band: getEvaluationBand(score),
+    scheduleComplete,
+    quizTitle: quiz.title,
+  };
+}
+
+/** Ensure a default final quiz exists (idempotent). */
+export async function ensureDefaultFinalEvaluationQuiz() {
+  const client = prisma as typeof prisma & {
+    finalEvaluationQuiz?: typeof prisma.finalEvaluationQuiz;
+  };
+  if (!client.finalEvaluationQuiz) {
+    throw new Error(
+      "Prisma client is missing FinalEvaluationQuiz. Stop the app and run: npx prisma generate && npm run dev"
+    );
+  }
+
+  const existing = await client.finalEvaluationQuiz.findFirst({
+    where: { isActive: true },
+  });
+  if (existing) return existing;
+
+  return client.finalEvaluationQuiz.create({
+    data: {
+      title: "Final Training Evaluation",
+      description:
+        "Evaluation after all day-wise training (including any extra week). One attempt per cycle. Your score is one evaluation input; Admin also reviews overall training performance. No pass/fail mark.",
+      passingScore: 0,
+      isActive: true,
+      questions: {
+        create: [
+          {
+            question: "What should you do if you are unsure about a process step?",
+            options: JSON.stringify([
+              "Guess and continue",
+              "Ask your Team Lead / follow documented process",
+              "Skip the step",
+              "Wait indefinitely without communicating",
+            ]),
+            correct: "Ask your Team Lead / follow documented process",
+            sortOrder: 0,
+          },
+          {
+            question: "Quality work primarily means:",
+            options: JSON.stringify([
+              "Finishing as fast as possible only",
+              "Meeting requirements with accuracy and care",
+              "Ignoring feedback",
+              "Skipping reviews",
+            ]),
+            correct: "Meeting requirements with accuracy and care",
+            sortOrder: 1,
+          },
+          {
+            question: "After training, evaluation of potential is based on:",
+            options: JSON.stringify([
+              "Only casual conversation",
+              "This final evaluation quiz score",
+              "Random chance",
+              "Social media activity",
+            ]),
+            correct: "This final evaluation quiz score",
+            sortOrder: 2,
+          },
+        ],
+      },
+    },
+  });
+}

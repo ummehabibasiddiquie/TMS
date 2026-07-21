@@ -8,7 +8,7 @@ import { QuizQuestionManager } from "@/components/admin/QuizQuestionManager";
 
 export default async function AdminContentPage() {
   const user = await getSession();
-  if (!user || user.role !== "ADMIN") redirect("/");
+  if (!user || (user.role !== "ADMIN" && user.role !== "TRAINER")) redirect("/");
 
   const [courses, quizzes] = await Promise.all([
     prisma.course.findMany({
@@ -19,11 +19,18 @@ export default async function AdminContentPage() {
           },
           orderBy: { order: "asc" },
         },
-        _count: { select: { enrollments: true } },
+        _count: {
+          select: {
+            enrollments: { where: { user: { active: true } } },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     }),
     prisma.quiz.findMany({
+      where: {
+        lesson: { module: { course: { published: true } } },
+      },
       include: {
         questions: { orderBy: { order: "asc" } },
         lesson: {
@@ -42,20 +49,21 @@ export default async function AdminContentPage() {
     }),
   ]);
 
-  const moduleCount = courses.reduce((total, course) => total + course.modules.length, 0);
-  const lessonCount = courses.reduce(
+  const publishedCourses = courses.filter((c) => c.published);
+  const moduleCount = publishedCourses.reduce((total, course) => total + course.modules.length, 0);
+  const lessonCount = publishedCourses.reduce(
     (total, course) => total + course.modules.reduce((sum, module) => sum + module._count.lessons, 0),
     0
   );
   const questionCount = quizzes.reduce((total, quiz) => total + quiz.questions.length, 0);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto max-w-5xl space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Content Studio</p>
-          <h1 className="mt-3 text-3xl font-bold text-white">Build training, lessons, and certification quizzes</h1>
-          <p className="mt-2 max-w-3xl text-slate-400">
+          <h1 className="mt-2 text-3xl font-bold text-white">Build training, lessons, and certification quizzes</h1>
+          <p className="mt-2 max-w-xl text-slate-400">
             This is the admin workspace for managing the learning content employees complete before certification.
           </p>
         </div>
@@ -69,7 +77,7 @@ export default async function AdminContentPage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { label: "Programs", value: courses.length, icon: FolderKanban },
+          { label: "Published Programs", value: publishedCourses.length, icon: FolderKanban },
           { label: "Modules", value: moduleCount, icon: BookOpen },
           { label: "Lessons", value: lessonCount, icon: FileText },
           { label: "Quiz Questions", value: questionCount, icon: HelpCircle },

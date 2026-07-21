@@ -1,0 +1,11 @@
+question,option1,option2,option3,option4,correct
+What should you do before starting a live project task?,Skip the documentation,Read the project SOP carefully,Ask only after submitting,Ignore quality guidelines,Read the project SOP carefully
+What is the minimum score required to pass certification?,50%,60%,70%,80%,80%
+Which action is correct when you are unsure about a task?,Guess and continue,Mark it complete anyway,Ask your team lead or QA for clarification,Leave it without any note,Ask your team lead or QA for clarification
+Why is following the SOP important?,It is optional for experienced staff,It ensures consistent quality and process,It only applies to trainers,It replaces project training,It ensures consistent quality and process
+What should you do after completing assigned training modules?,Wait without action,Start live work immediately without checks,Complete required quizzes and await approval if needed,Delete the training materials,Complete required quizzes and await approval if needed
+If a quiz attempt fails below the passing score what should you do?,Stop training permanently,Review the material and retake within allowed attempts,Change your own score,Skip the quiz entirely,Review the material and retake within allowed attempts
+Who should you contact first for day to day training blockers?,A random teammate only,Your assigned team lead,An external client,No one,Your assigned team lead
+What does deactivated account status mean in the system?,The user can still log in normally,The user cannot log in and is excluded from active totals,The user is permanently deleted,The user becomes an admin,The user cannot log in and is excluded from active totals
+Which project status should appear in Active Projects counts?,COMING_SOON,INACTIVE,ACTIVE,ON_HOLD,ACTIVE
+What is the best practice for quiz answer options in an import file?,Leave correct blank,Put correct text that exactly matches one option,Use option numbers only in correct,Merge multiple questions in one cell,Put correct text that exactly matches one option

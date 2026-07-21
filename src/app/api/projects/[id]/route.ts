@@ -105,20 +105,26 @@ export async function PATCH(
     active,
   } = await req.json();
 
+  const resolvedStatus = status !== undefined ? status : undefined;
+  const resolvedActive =
+    resolvedStatus !== undefined
+      ? resolvedStatus === "ACTIVE" && active !== false
+      : active;
+
   const project = await prisma.project.update({
     where: { id: params.id },
     data: {
       ...(name !== undefined && { name: name.trim() }),
       ...(description !== undefined && { description: description?.trim() || null }),
       ...(categoryId !== undefined && { categoryId: categoryId || null }),
-      ...(status !== undefined && { status }),
+      ...(resolvedStatus !== undefined && { status: resolvedStatus }),
       ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
       ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
       ...(priority !== undefined && { priority }),
       ...(resources !== undefined && { resources: resources?.trim() || null }),
       ...(documentation !== undefined && { documentation: documentation?.trim() || null }),
       ...(url !== undefined && { url: url?.trim() || null }),
-      ...(active !== undefined && { active }),
+      ...(resolvedActive !== undefined && { active: resolvedActive }),
     },
     include: {
       categoryRel: {

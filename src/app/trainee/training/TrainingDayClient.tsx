@@ -1,294 +1,594 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Lock,
   CheckCircle,
-  AlertTriangle,
-  Send,
+  Circle,
   BookOpen,
-  Clock,
+  History,
+  ClipboardList,
+  ChevronRight,
+  ChevronDown,
+  Eye,
+  Briefcase,
+  Layers,
+  MessageSquare,
+  Star,
 } from "lucide-react";
-
-type Phase = {
-  id: string;
-  phase: string;
-  productivityTarget: number;
-  qualityTarget: number;
-  qcDeadline: string;
-};
-
-type RequiredLearn = {
-  id: string;
-  label: string;
-  lessonId: string | null;
-  courseId: string | null;
-  lesson?: { id: string; title: string; module: { courseId: string } } | null;
-  course?: { id: string; title: string } | null;
-};
+import type { DaySnapshot, DayWisePlan, DayChecklistItem } from "@/lib/day-wise-training";
+import { TrackerProgressPanel } from "@/components/tracker/TrackerProgressPanel";
+import { FinalExamGateCard } from "@/components/trainee/FinalEvaluationExam";
 
 type Props = {
-  currentDay: number;
-  day: {
-    id: number;
-    title: string;
-    projectName: string;
-    phases: Phase[];
-    requiredLearn: RequiredLearn[];
-  } | null;
-  allDays: { id: number; title: string; projectName: string }[];
-  learningComplete: boolean;
-  progressMap: Record<string, { completed: boolean; watchPercent: number }>;
-  submissions: { phase: string; id: string }[];
-  profile: { trainingStarted: boolean; currentDayNumber: number } | null;
+  plan: DayWisePlan;
 };
 
-const PHASE_LABELS: Record<string, string> = {
-  QUALITY_FOCUS: "Phase 1 — Quality Focus (3 hrs)",
-  QUALITY_PRODUCTIVITY: "Phase 2 — Quality + Productivity (3 hrs)",
-  PRODUCTION_SIMULATION: "Phase 3 — Production Simulation (3 hrs)",
-};
-
-export function TrainingDayClient({
-  currentDay,
+function LeadReviewCard({
   day,
-  allDays,
-  learningComplete,
-  progressMap,
-  submissions,
-  profile,
-}: Props) {
-  const [activePhase, setActivePhase] = useState(day?.phases[0]?.phase ?? "QUALITY_FOCUS");
-  const [form, setForm] = useState({
-    sopRead: false,
-    tasksCompleted: 0,
-    productivityPct: 0,
-    qualityPct: 0,
-    issues: "",
-  });
-  const [msg, setMsg] = useState("");
-  const [loading, setLoading] = useState(false);
+  compact,
+}: {
+  day: DaySnapshot;
+  compact?: boolean;
+}) {
+  const review = day.review;
+  if (!review || (!review.notes && review.rating == null)) return null;
 
-  async function submitDaily() {
-    if (!learningComplete) {
-      setMsg("Complete required learning first.");
-      return;
-    }
-    setLoading(true);
-    setMsg("");
-    const res = await fetch("/api/training/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dayNumber: currentDay,
-        phase: activePhase,
-        ...form,
-      }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setMsg(data.error || "Submission failed");
-      return;
-    }
-    setMsg("Daily submission recorded successfully.");
+  return (
+    <div
+      className={
+        compact
+          ? "rounded-xl border border-blue-800/40 bg-blue-950/25 p-3"
+          : "mt-5 rounded-xl border border-blue-800/50 bg-blue-950/30 p-4"
+      }
+    >
+      <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-blue-200">
+        <MessageSquare className="h-4 w-4 shrink-0" />
+        {compact ? (
+          <>
+            Day {day.dayNumber}: {day.title}
+          </>
+        ) : (
+          <>Feedback from your Team Lead</>
+        )}
+        {review.reviewerName ? (
+          <span className="font-normal text-slate-400">· {review.reviewerName}</span>
+        ) : null}
+      </h3>
+      {review.rating != null && (
+        <p className="mb-2 inline-flex items-center gap-1 text-sm text-amber-200">
+          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+          {review.rating}/5
+        </p>
+      )}
+      {review.notes && (
+        <p className="whitespace-pre-wrap text-sm text-slate-200">{review.notes}</p>
+      )}
+    </div>
+  );
+}
+
+function ProgressBar({ percent }: { percent: number }) {
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+      <div
+        className="h-full rounded-full bg-emerald-500 transition-all"
+        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+      />
+    </div>
+  );
+}
+
+function DayItemsSummary({ day }: { day: DaySnapshot }) {
+  const items = [
+    ...day.checklist.map((c) => ({
+      key: c.id,
+      title: c.title,
+      done: c.completed,
+      tag: "Checklist",
+    })),
+    ...day.lessons.map((l) => ({
+      key: l.linkId,
+      title: l.label || l.title,
+      done: l.completed,
+      tag: "Course",
+    })),
+    ...(day.workItems || []).map((c) => ({
+      key: c.id,
+      title: c.title,
+      done: c.completed,
+      tag: "Work",
+    })),
+  ];
+
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-500">No items on this day.</p>;
   }
 
-  if (!profile?.trainingStarted) {
+  return (
+    <ul className="mt-3 space-y-1.5">
+      {items.map((item) => (
+        <li key={item.key} className="flex items-start gap-2 text-sm text-slate-300">
+          {item.done ? (
+            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+          ) : (
+            <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+          )}
+          <span className={item.done ? "text-slate-400" : ""}>
+            <span className="mr-1.5 text-[10px] uppercase text-slate-500">{item.tag}</span>
+            {item.title}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TickList({
+  items,
+  onToggle,
+  busyId,
+  readOnly,
+}: {
+  items: DayChecklistItem[];
+  onToggle: (itemId: string, completed: boolean) => void;
+  busyId: string | null;
+  readOnly?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="space-y-3">
+      {items.map((item) => (
+        <li key={item.id}>
+          {readOnly ? (
+            <div className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3">
+              {item.completed ? (
+                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+              ) : (
+                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+              )}
+              <div>
+                <p
+                  className={`font-medium ${item.completed ? "text-slate-400 line-through" : "text-slate-100"}`}
+                >
+                  {item.title}
+                </p>
+                {item.description && (
+                  <p className="mt-0.5 text-sm text-slate-500">{item.description}</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={busyId === item.id}
+              onClick={() => onToggle(item.id, !item.completed)}
+              className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3 text-left transition hover:border-slate-600 disabled:opacity-60"
+            >
+              {item.completed ? (
+                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+              ) : (
+                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+              )}
+              <div>
+                <p
+                  className={`font-medium ${item.completed ? "text-slate-400 line-through" : "text-slate-100"}`}
+                >
+                  {item.title}
+                </p>
+                {item.description && (
+                  <p className="mt-0.5 text-sm text-slate-500">{item.description}</p>
+                )}
+              </div>
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TodayLessons({ day, readOnly }: { day: DaySnapshot; readOnly?: boolean }) {
+  if (day.lessons.length === 0) return null;
+
+  return (
+    <ul className="space-y-3">
+      {day.lessons.map((lesson) => {
+        const href = `/trainee/courses/${lesson.courseId}/player?lesson=${lesson.lessonId}`;
+        return (
+          <li
+            key={lesson.linkId}
+            className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3"
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              {lesson.completed ? (
+                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+              ) : (
+                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+              )}
+              <div className="min-w-0">
+                <p className="font-medium text-slate-100">{lesson.label || lesson.title}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {lesson.courseTitle} · {lesson.moduleTitle}
+                  {lesson.watchPercent > 0 && !lesson.completed
+                    ? ` · ${lesson.watchPercent}%`
+                    : ""}
+                </p>
+              </div>
+            </div>
+            {!readOnly || lesson.completed ? (
+              <Link
+                href={href}
+                className="inline-flex shrink-0 items-center gap-1 text-sm text-blue-400 hover:underline"
+              >
+                {lesson.completed ? "Review" : "Start"}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <span className="text-xs text-slate-500">Locked</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function DayContent({
+  day,
+  readOnly,
+  onToggle,
+  busyId,
+}: {
+  day: DaySnapshot;
+  readOnly?: boolean;
+  onToggle: (itemId: string, completed: boolean) => void;
+  busyId: string | null;
+}) {
+  const workItems = day.workItems || [];
+  const hasAnything =
+    day.checklist.length > 0 || day.lessons.length > 0 || workItems.length > 0;
+
+  if (!hasAnything) {
     return (
-      <div className="glass-panel max-w-lg p-8 text-center">
-        <h2 className="text-xl font-bold">Training Overview</h2>
-        <p className="mt-2 text-slate-400">3 weeks · 15 working days · Project-based</p>
-        <p className="mt-4 text-sm">Contact your trainer to start training.</p>
+      <p className="text-sm text-slate-400">
+        No work on this day yet. Your Team Lead will add checklist items, courses, or training
+        work.
+      </p>
+    );
+  }
+
+  if (readOnly) {
+    return <DayItemsSummary day={day} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      {day.checklist.length > 0 && (
+        <section>
+          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <ClipboardList className="h-3.5 w-3.5 text-sky-400" />
+            Checklist
+          </h3>
+          <TickList items={day.checklist} onToggle={onToggle} busyId={busyId} />
+        </section>
+      )}
+      {day.lessons.length > 0 && (
+        <section>
+          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <BookOpen className="h-3.5 w-3.5 text-blue-400" />
+            Courses / videos
+          </h3>
+          <TodayLessons day={day} />
+        </section>
+      )}
+      {workItems.length > 0 && (
+        <section>
+          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <Briefcase className="h-3.5 w-3.5 text-amber-400" />
+            Training work
+          </h3>
+          <TickList items={workItems} onToggle={onToggle} busyId={busyId} />
+        </section>
+      )}
+    </div>
+  );
+}
+
+export function TrainingDayClient({ plan: initial }: Props) {
+  const router = useRouter();
+  const [plan, setPlan] = useState(initial);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [msg, setMsg] = useState("");
+  const [viewDayNumber, setViewDayNumber] = useState<number | null>(null);
+  const [showAllPast, setShowAllPast] = useState(false);
+
+  const today = plan.today;
+  const pastDays = plan.pastDays ?? [];
+
+  const daysWithFeedback = useMemo(() => {
+    const list: DaySnapshot[] = [];
+    if (today?.review && (today.review.notes || today.review.rating != null)) {
+      list.push(today);
+    }
+    for (const d of pastDays) {
+      if (d.review && (d.review.notes || d.review.rating != null)) {
+        list.push(d);
+      }
+    }
+    return list.sort((a, b) => b.dayNumber - a.dayNumber);
+  }, [today, pastDays]);
+
+  const viewing = useMemo(() => {
+    if (viewDayNumber == null || !today) return today;
+    if (viewDayNumber === today.dayNumber) return today;
+    return pastDays.find((d) => d.dayNumber === viewDayNumber) ?? today;
+  }, [viewDayNumber, today, pastDays]);
+
+  const isReviewingPast =
+    Boolean(today && viewing && viewing.dayNumber !== today.dayNumber);
+
+  async function toggleChecklist(itemId: string, completed: boolean) {
+    setBusyId(itemId);
+    setMsg("");
+    const res = await fetch("/api/curriculum/checklist-progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, completed }),
+    });
+    const data = await res.json();
+    setBusyId(null);
+    if (!res.ok) {
+      setMsg(data.error || "Could not update checklist");
+      return;
+    }
+    if (data.plan) {
+      setPlan(data.plan);
+      setViewDayNumber(null);
+    }
+    router.refresh();
+  }
+
+  if (plan.source === "empty" || !today || !viewing) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center">
+        <h2 className="text-xl font-bold">Your day plan</h2>
+        <p className="mt-2 text-slate-400">
+          No day-wise curriculum has been set up yet. Ask Admin or your Team Lead to create Day 1
+          checklist and training days.
+        </p>
+        <Link href="/onboarding" className="mt-6 inline-block text-sm text-blue-400 hover:underline">
+          Open welcome guide
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Daily Training</h1>
-        <p className="text-slate-400">
-          Day {currentDay}: {day?.title} — {day?.projectName}
+        <h1 className="text-3xl font-bold tracking-tight">Today&apos;s work</h1>
+        <p className="mt-1 text-slate-400">
+          Day {today.dayNumber} of {plan.totalDays}
+          {today.projectName ? ` · ${today.projectName}` : ""}
         </p>
-      </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {allDays.map((d) => (
-          <div
-            key={d.id}
-            className={`shrink-0 rounded-xl px-4 py-2 text-sm ${
-              d.id === currentDay
-                ? "bg-blue-600 text-white"
-                : d.id < currentDay
-                  ? "bg-emerald-900/30 text-emerald-300"
-                  : "bg-slate-800 text-slate-500"
-            }`}
-          >
-            D{d.id}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Today</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{today.percent}%</p>
+            <ProgressBar percent={today.percent} />
+            <p className="mt-1 text-xs text-slate-500">
+              {today.completedCount}/{today.totalCount} items
+            </p>
           </div>
-        ))}
-      </div>
-
-      <div className="glass-panel p-6">
-        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <BookOpen className="h-5 w-5 text-blue-400" />
-          Required Learning
-          {learningComplete ? (
-            <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">
-              Complete
-            </span>
-          ) : (
-            <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
-              Incomplete
-            </span>
-          )}
-        </h3>
-        {!learningComplete && (
-          <div className="mb-4 flex items-start gap-2 rounded-xl bg-amber-500/10 p-4 text-sm text-amber-200">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            Complete all items below before Phase work and daily submission.
-          </div>
-        )}
-        <ul className="space-y-3">
-          {day?.requiredLearn.map((req) => {
-            const lp = req.lessonId ? progressMap[req.lessonId] : null;
-            const done = lp?.completed;
-            const courseId =
-              req.courseId ?? req.lesson?.module?.courseId;
-            const href = req.lessonId
-              ? `/trainee/courses/${courseId}/player?lesson=${req.lessonId}`
-              : req.courseId
-                ? `/trainee/courses/${req.courseId}/player`
-                : "#";
-            return (
-              <li
-                key={req.id}
-                className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  {done ? (
-                    <CheckCircle className="h-5 w-5 text-emerald-400" />
-                  ) : (
-                    <Lock className="h-5 w-5 text-slate-500" />
-                  )}
-                  <span>{req.label}</span>
-                </div>
-                <Link
-                  href={href}
-                  className="text-sm text-blue-400 hover:underline"
-                >
-                  {done ? "Review" : "Start"}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {day?.phases.map((phase) => (
-          <div
-            key={phase.id}
-            className={`glass-panel cursor-pointer p-5 transition ${
-              activePhase === phase.phase ? "ring-2 ring-blue-500" : ""
-            } ${!learningComplete ? "opacity-60" : ""}`}
-            onClick={() => learningComplete && setActivePhase(phase.phase)}
-          >
-            <h4 className="font-semibold text-sm">
-              {PHASE_LABELS[phase.phase] ?? phase.phase}
-            </h4>
-            <div className="mt-4 space-y-2 text-sm text-slate-400">
-              <p>SOP/PPRT Reading</p>
-              <p>Productivity ~{phase.productivityTarget}%</p>
-              <p>Quality ~{phase.qualityTarget}%</p>
-              <p className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                QC by {phase.qcDeadline}
-              </p>
-            </div>
-            {submissions.some((s) => s.phase === phase.phase) && (
-              <span className="mt-3 inline-block text-xs text-emerald-400">
-                Submitted
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div
-        className={`glass-panel p-6 ${!learningComplete ? "pointer-events-none opacity-50" : ""}`}
-      >
-        <h3 className="mb-4 text-lg font-semibold">Daily Performance Submission</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.sopRead}
-              onChange={(e) => setForm({ ...form, sopRead: e.target.checked })}
-              className="rounded"
-            />
-            SOP Read
-          </label>
-          <div>
-            <label className="text-sm text-slate-400">Tasks Completed</label>
-            <input
-              type="number"
-              value={form.tasksCompleted}
-              onChange={(e) =>
-                setForm({ ...form, tasksCompleted: parseInt(e.target.value) || 0 })
-              }
-              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-slate-400">Productivity %</label>
-            <input
-              type="number"
-              value={form.productivityPct}
-              onChange={(e) =>
-                setForm({ ...form, productivityPct: parseFloat(e.target.value) || 0 })
-              }
-              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
-            />
-          </div>
-          <div>
-            <label className="text-sm text-slate-400">Quality %</label>
-            <input
-              type="number"
-              value={form.qualityPct}
-              onChange={(e) =>
-                setForm({ ...form, qualityPct: parseFloat(e.target.value) || 0 })
-              }
-              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="text-sm text-slate-400">Issues (optional)</label>
-            <textarea
-              value={form.issues}
-              onChange={(e) => setForm({ ...form, issues: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
-              rows={2}
-            />
+          <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Training overall</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+              {plan.overallPercent}%
+            </p>
+            <ProgressBar percent={plan.overallPercent} />
+            <p className="mt-1 text-xs text-slate-500">
+              Across {plan.totalDays} day{plan.totalDays === 1 ? "" : "s"}
+            </p>
           </div>
         </div>
-        {msg && (
-          <p
-            className={`mt-4 text-sm ${msg.includes("success") ? "text-emerald-400" : "text-amber-300"}`}
-          >
-            {msg}
+      </div>
+
+      {!isReviewingPast && daysWithFeedback.length > 0 && (
+        <div className="rounded-2xl border border-blue-800/40 bg-blue-950/20 p-5">
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-200">
+            <MessageSquare className="h-4 w-4" />
+            Team Lead feedback
+          </h3>
+          <p className="mb-4 text-sm text-slate-400">
+            Reviews from your lead for completed days — visible here without opening past days.
           </p>
+          <ul className="space-y-3">
+            {daysWithFeedback.map((d) => (
+              <li key={d.dayNumber}>
+                <LeadReviewCard day={d} compact />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {plan.allDays.map((d) => {
+          const isCurrent = d.dayNumber === plan.currentDay;
+          const isPast = d.dayNumber < plan.currentDay;
+          const selected =
+            (viewDayNumber ?? today.dayNumber) === d.dayNumber;
+          const clickable = isCurrent || isPast;
+          return (
+            <button
+              key={d.dayNumber}
+              type="button"
+              disabled={!clickable}
+              title={`${d.title}${d.projectName ? ` — ${d.projectName}` : ""}`}
+              onClick={() => setViewDayNumber(isCurrent ? null : d.dayNumber)}
+              className={`shrink-0 rounded-xl px-3 py-2 text-sm transition ${
+                selected
+                  ? "bg-blue-600 text-white"
+                  : d.done
+                    ? "bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60"
+                    : isPast
+                      ? "bg-amber-900/30 text-amber-200 hover:bg-amber-900/50"
+                      : "cursor-default bg-slate-800 text-slate-500"
+              }`}
+            >
+              D{d.dayNumber}
+            </button>
+          );
+        })}
+      </div>
+
+      {isReviewingPast && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm">
+          <span className="inline-flex items-center gap-2 text-slate-300">
+            <Eye className="h-4 w-4 text-slate-400" />
+            Reviewing Day {viewing.dayNumber} (read-only)
+          </span>
+          <button
+            type="button"
+            onClick={() => setViewDayNumber(null)}
+            className="text-blue-400 hover:underline"
+          >
+            Back to today
+          </button>
+        </div>
+      )}
+
+      {!isReviewingPast && pastDays.length > 0 && (
+        <div className="rounded-2xl border border-slate-700/80 bg-slate-900/40 p-5">
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <History className="h-4 w-4" />
+            Previous days
+          </h3>
+          <div className="rounded-xl border border-slate-700/60 bg-slate-950/40 p-4">
+            <p className="font-medium text-slate-200">
+              Yesterday — Day {pastDays[0].dayNumber}: {pastDays[0].title}
+              {pastDays[0].projectName ? ` · ${pastDays[0].projectName}` : ""}
+            </p>
+            <DayItemsSummary day={pastDays[0]} />
+            <p className="mt-2 text-xs text-slate-500">
+              {pastDays[0].completedCount}/{pastDays[0].totalCount} done · {pastDays[0].percent}%
+              {pastDays[0].review ? " · Lead feedback available" : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => setViewDayNumber(pastDays[0].dayNumber)}
+              className="mt-3 text-sm text-blue-400 hover:underline"
+            >
+              Open day review
+            </button>
+          </div>
+
+          {pastDays.length > 1 && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setShowAllPast((v) => !v)}
+                className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"
+              >
+                <ChevronDown
+                  className={`h-4 w-4 transition ${showAllPast ? "rotate-180" : ""}`}
+                />
+                {showAllPast ? "Hide" : "Show"} all previous days ({pastDays.length})
+              </button>
+              {showAllPast && (
+                <ul className="mt-3 space-y-3">
+                  {pastDays.slice(1).map((day) => (
+                    <li
+                      key={day.dayNumber}
+                      className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setViewDayNumber(day.dayNumber)}
+                        className="w-full text-left"
+                      >
+                        <p className="font-medium text-slate-200">
+                          Day {day.dayNumber}: {day.title}
+                          {day.projectName ? ` · ${day.projectName}` : ""}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {day.completedCount}/{day.totalCount} · {day.percent}%
+                          {day.review ? " · Lead feedback" : ""}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-6">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <Layers className="h-5 w-5 text-blue-400" />
+          <h2 className="text-lg font-semibold">{viewing.title}</h2>
+          {viewing.done ? (
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">
+              Done
+            </span>
+          ) : (
+            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
+              {viewing.completedCount}/{viewing.totalCount}
+            </span>
+          )}
+        </div>
+        {viewing.description && (
+          <p className="mb-4 text-sm text-slate-400">{viewing.description}</p>
         )}
-        <button
-          onClick={submitDaily}
-          disabled={loading || !learningComplete}
-          className="mt-4 flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-medium hover:bg-blue-500 disabled:opacity-50"
+        <div className="mb-4 space-y-1">
+          <ProgressBar percent={viewing.percent} />
+          <p className="text-xs text-slate-500">
+            {isReviewingPast ? `Day ${viewing.dayNumber}` : "Today"}: {viewing.percent}%
+          </p>
+        </div>
+
+        <DayContent
+          day={viewing}
+          readOnly={isReviewingPast}
+          onToggle={toggleChecklist}
+          busyId={busyId}
+        />
+
+        <LeadReviewCard day={viewing} />
+
+        {msg && <p className="mt-4 text-sm text-amber-300">{msg}</p>}
+      </div>
+
+      <FinalExamGateCard />
+
+      {plan.readyForProduction && <TrackerProgressPanel />}
+
+      {plan.trainingStatus === "AWAITING_EVALUATION" && !plan.readyForProduction && (
+        <p className="rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+          Training days are finished. Open the Final Quiz when you are ready — one attempt. Your
+          score is one part of how Admin reviews overall performance.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
+        <Link
+          href="/trainee/progress"
+          className="text-slate-400 hover:text-slate-200 hover:underline"
         >
-          <Send className="h-4 w-4" />
-          {loading ? "Submitting..." : "Submit Daily Performance"}
-        </button>
+          View full progress
+        </Link>
+        <Link
+          href="/trainee/courses"
+          className="inline-flex items-center gap-2 text-blue-400 hover:underline"
+        >
+          <BookOpen className="h-4 w-4" />
+          Review past lessons
+        </Link>
       </div>
     </div>
   );

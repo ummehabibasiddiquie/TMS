@@ -2,6 +2,9 @@ import type { Role } from "@/types";
 
 export const ROLES: Role[] = ["TRAINEE", "TRAINER", "ADMIN", "TEAM_LEAD", "EMPLOYEE"];
 
+/** Roles Admin can create/edit in Manage Users (API-backed). */
+export const ADMIN_MANAGE_ROLES: Role[] = ["TRAINEE", "TRAINER", "ADMIN"];
+
 export const ROLE_LABELS: Record<Role, string> = {
   TRAINER: "Team Lead",
   TRAINEE: "Employee",
