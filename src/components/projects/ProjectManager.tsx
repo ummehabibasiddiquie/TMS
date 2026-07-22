@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, X, FolderKanban } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
@@ -48,6 +48,9 @@ type User = {
 export function ProjectManager({ projects: initial, user }: { projects: Project[]; user: User }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initial);
+  useEffect(() => {
+    setProjects(initial);
+  }, [initial]);
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({

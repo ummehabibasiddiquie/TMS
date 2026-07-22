@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, X, FolderOpen, Image as ImageIcon, Upload, UserPlus } from "lucide-react";
@@ -16,6 +16,28 @@ type Course = {
   _count: { enrollments: number };
 };
 
+function normalizeCourse(raw: {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+  published: boolean;
+  modules?: { lessons?: unknown[]; _count?: { lessons?: number } }[];
+  _count?: { enrollments?: number };
+}): Course {
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description,
+    thumbnail: raw.thumbnail,
+    published: raw.published,
+    modules: (raw.modules || []).map((m) => ({
+      _count: { lessons: m._count?.lessons ?? m.lessons?.length ?? 0 },
+    })),
+    _count: { enrollments: raw._count?.enrollments ?? 0 },
+  };
+}
+
 export function CourseManager({
   courses: initial,
   basePath = "/trainer",
@@ -25,6 +47,10 @@ export function CourseManager({
 }) {
   const router = useRouter();
   const [courses, setCourses] = useState(initial);
+
+  useEffect(() => {
+    setCourses(initial);
+  }, [initial]);
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [editing, setEditing] = useState<Course | null>(null);
   const [form, setForm] = useState({ title: "", description: "", published: false, thumbnail: "" });
@@ -96,6 +122,26 @@ export function CourseManager({
     if (!res.ok) {
       setError(data.error || "Failed to save");
       return;
+    }
+    if (data.course) {
+      const next = normalizeCourse(data.course);
+      if (modal === "create") {
+        setCourses((list) => [next, ...list]);
+      } else if (editing) {
+        setCourses((list) =>
+          list.map((c) =>
+            c.id === editing.id
+              ? {
+                  ...c,
+                  title: next.title,
+                  description: next.description,
+                  thumbnail: next.thumbnail,
+                  published: next.published,
+                }
+              : c
+          )
+        );
+      }
     }
     setModal(null);
     router.refresh();

@@ -65,7 +65,14 @@ export async function POST(req: Request) {
         },
       },
     },
-    include: { modules: { include: { lessons: true } } },
+    include: {
+      modules: { include: { lessons: true, _count: { select: { lessons: true } } } },
+      _count: {
+        select: {
+          enrollments: { where: { user: { active: true } } },
+        },
+      },
+    },
   });
 
   return NextResponse.json({ course });

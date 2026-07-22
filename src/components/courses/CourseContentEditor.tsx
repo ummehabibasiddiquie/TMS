@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -87,17 +87,38 @@ function parseOptions(options: string) {
 }
 
 export function CourseContentEditor({
-  course,
+  course: initialCourse,
   basePath,
 }: {
   course: Course;
   basePath: "/trainer" | "/admin";
 }) {
   const router = useRouter();
+  const [course, setCourse] = useState(initialCourse);
   const [expanded, setExpanded] = useState<Set<string>>(
-    new Set(course.modules.map((m) => m.id))
+    new Set(initialCourse.modules.map((m) => m.id))
   );
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setCourse(initialCourse);
+  }, [initialCourse]);
+
+  async function reloadCourse() {
+    const res = await fetch(`/api/courses/${course.id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.course) return;
+    const nextCourse = data.course as Course;
+    setCourse(nextCourse);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const m of nextCourse.modules) {
+        if (!course.modules.some((old) => old.id === m.id)) next.add(m.id);
+      }
+      return next;
+    });
+  }
 
   function toggle(id: string) {
     const next = new Set(expanded);
@@ -119,6 +140,7 @@ export function CourseContentEditor({
       alert(d.error || "Request failed");
       return false;
     }
+    await reloadCourse();
     router.refresh();
     return true;
   }
@@ -249,6 +271,10 @@ function ModuleTitleEditor({
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(module.title);
+
+  useEffect(() => {
+    setTitle(module.title);
+  }, [module.title]);
 
   return (
     <div className="flex flex-1 items-center gap-2">
