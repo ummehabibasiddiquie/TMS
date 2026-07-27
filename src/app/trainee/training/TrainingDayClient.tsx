@@ -81,18 +81,26 @@ function ProgressBar({ percent }: { percent: number }) {
 }
 
 function DayItemsSummary({ day }: { day: DaySnapshot }) {
-  const items = [
+  const items: {
+    key: string;
+    title: string;
+    done: boolean | null;
+    tag: string;
+    hours: number | null;
+  }[] = [
     ...day.checklist.map((c) => ({
       key: c.id,
       title: c.title,
       done: c.completed as boolean | null,
       tag: "Checklist",
+      hours: null as number | null,
     })),
     ...day.lessons.map((l) => ({
       key: l.linkId,
       title: l.label || l.title,
       done: l.completed as boolean | null,
       tag: "Course",
+      hours: null as number | null,
     })),
     ...(day.workItems || []).map((c) => ({
       key: c.id,
@@ -121,7 +129,7 @@ function DayItemsSummary({ day }: { day: DaySnapshot }) {
           <span className={item.done ? "text-slate-400" : ""}>
             <span className="mr-1.5 text-[10px] uppercase text-slate-500">{item.tag}</span>
             {item.title}
-            {"hours" in item && item.hours != null ? (
+            {item.hours != null ? (
               <span className="ml-1 text-xs text-amber-200/80">({item.hours}h assigned)</span>
             ) : null}
           </span>
