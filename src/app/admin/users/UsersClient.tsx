@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatRole } from "@/lib/roles";
 import { AddUserModal } from "@/components/admin/AddUserModal";
 import { EditUserModal } from "@/components/admin/EditUserModal";
@@ -41,6 +41,15 @@ export function UsersClient({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userList, setUserList] = useState(users);
   const [teamLeads, setTeamLeads] = useState(initialTeamLeads);
+
+  useEffect(() => {
+    setUserList(users);
+  }, [users]);
+
+  useEffect(() => {
+    setTeamLeads(initialTeamLeads);
+  }, [initialTeamLeads]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All Roles");
   const [statusFilter, setStatusFilter] = useState("All Statuses");

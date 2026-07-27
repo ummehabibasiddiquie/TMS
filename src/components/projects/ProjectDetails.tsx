@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Users, Calendar, FileText, Link as LinkIcon, Plus, X, Trash2, BookOpen, HelpCircle } from "lucide-react";
@@ -53,17 +53,31 @@ type User = {
   role: string;
 };
 
-export function ProjectDetails({ project, user }: { project: Project; user: User }) {
+export function ProjectDetails({ project: initialProject, user }: { project: Project; user: User }) {
   const router = useRouter();
+  const [project, setProject] = useState(initialProject);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
+  useEffect(() => {
+    setProject(initialProject);
+  }, [initialProject]);
+
   const isAdmin = user.role === "ADMIN";
   const isTeamLead = user.role === "TRAINER";
   const canManage = isAdmin || isTeamLead;
+
+  async function reloadAssignments() {
+    const res = await fetch(`/api/projects/${project.id}/assignments`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.assignments)) {
+      setProject((prev) => ({ ...prev, assignments: data.assignments }));
+    }
+  }
 
   async function loadUsers() {
     if (allUsers.length > 0) return;
@@ -99,6 +113,7 @@ export function ProjectDetails({ project, user }: { project: Project; user: User
       }
       setShowAssignModal(false);
       setSelectedUsers([]);
+      await reloadAssignments();
       router.refresh();
     } catch (err) {
       setLoading(false);
@@ -118,6 +133,10 @@ export function ProjectDetails({ project, user }: { project: Project; user: User
         alert("Failed to remove assignment");
         return;
       }
+      setProject((prev) => ({
+        ...prev,
+        assignments: prev.assignments.filter((a) => a.id !== assignmentId),
+      }));
       router.refresh();
     } catch (err) {
       setLoading(false);

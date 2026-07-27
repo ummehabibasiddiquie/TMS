@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HelpCircle, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
@@ -38,13 +38,18 @@ const emptyForm: FormState = {
   correct: "Option A",
 };
 
-export function QuizQuestionManager({ quizzes }: { quizzes: Quiz[] }) {
+export function QuizQuestionManager({ quizzes: initialQuizzes }: { quizzes: Quiz[] }) {
   const router = useRouter();
-  const [selectedQuizId, setSelectedQuizId] = useState(quizzes[0]?.id ?? "");
+  const [quizzes, setQuizzes] = useState(initialQuizzes);
+  const [selectedQuizId, setSelectedQuizId] = useState(initialQuizzes[0]?.id ?? "");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setQuizzes(initialQuizzes);
+  }, [initialQuizzes]);
 
   const selectedQuiz = useMemo(
     () => quizzes.find((quiz) => quiz.id === selectedQuizId) ?? quizzes[0],
@@ -110,6 +115,22 @@ export function QuizQuestionManager({ quizzes }: { quizzes: Quiz[] }) {
       return;
     }
 
+    const saved = data.question as Question | undefined;
+    if (saved && selectedQuiz) {
+      setQuizzes((list) =>
+        list.map((quiz) => {
+          if (quiz.id !== selectedQuiz.id) return quiz;
+          if (isNew) {
+            return { ...quiz, questions: [...quiz.questions, saved] };
+          }
+          return {
+            ...quiz,
+            questions: quiz.questions.map((q) => (q.id === saved.id ? saved : q)),
+          };
+        })
+      );
+    }
+
     setEditingId(null);
     router.refresh();
   }
@@ -117,7 +138,16 @@ export function QuizQuestionManager({ quizzes }: { quizzes: Quiz[] }) {
   async function remove(question: Question) {
     if (!confirm("Delete this question?")) return;
     const res = await fetch(`/api/quiz/questions/${question.id}`, { method: "DELETE" });
-    if (res.ok) router.refresh();
+    if (res.ok) {
+      setQuizzes((list) =>
+        list.map((quiz) =>
+          quiz.id === selectedQuiz?.id
+            ? { ...quiz, questions: quiz.questions.filter((q) => q.id !== question.id) }
+            : quiz
+        )
+      );
+      router.refresh();
+    }
   }
 
   if (!quizzes.length) {
