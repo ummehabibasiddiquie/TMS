@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -85,20 +85,21 @@ function DayItemsSummary({ day }: { day: DaySnapshot }) {
     ...day.checklist.map((c) => ({
       key: c.id,
       title: c.title,
-      done: c.completed,
+      done: c.completed as boolean | null,
       tag: "Checklist",
     })),
     ...day.lessons.map((l) => ({
       key: l.linkId,
       title: l.label || l.title,
-      done: l.completed,
+      done: l.completed as boolean | null,
       tag: "Course",
     })),
     ...(day.workItems || []).map((c) => ({
       key: c.id,
       title: c.title,
-      done: c.completed,
+      done: null as boolean | null,
       tag: "Work",
+      hours: c.assignedHours,
     })),
   ];
 
@@ -110,7 +111,9 @@ function DayItemsSummary({ day }: { day: DaySnapshot }) {
     <ul className="mt-3 space-y-1.5">
       {items.map((item) => (
         <li key={item.key} className="flex items-start gap-2 text-sm text-slate-300">
-          {item.done ? (
+          {item.done === null ? (
+            <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          ) : item.done ? (
             <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
           ) : (
             <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
@@ -118,10 +121,124 @@ function DayItemsSummary({ day }: { day: DaySnapshot }) {
           <span className={item.done ? "text-slate-400" : ""}>
             <span className="mr-1.5 text-[10px] uppercase text-slate-500">{item.tag}</span>
             {item.title}
+            {"hours" in item && item.hours != null ? (
+              <span className="ml-1 text-xs text-amber-200/80">({item.hours}h assigned)</span>
+            ) : null}
           </span>
         </li>
       ))}
     </ul>
+  );
+}
+
+type HrmsProjectWork = {
+  projectId: string;
+  projectName: string;
+  hoursLogged: number | null;
+  productionUnits: number | null;
+  entries: number;
+  qualityScore: number | null;
+  lastActivityAt: string | null;
+  message?: string;
+};
+
+function TrainingWorkPanel({
+  day,
+  workByProject,
+  workLoading,
+  workMessage,
+}: {
+  day: DaySnapshot;
+  workByProject: HrmsProjectWork[];
+  workLoading: boolean;
+  workMessage?: string;
+}) {
+  const items = day.workItems || [];
+  if (items.length === 0) return null;
+
+  function metricsFor(item: DayChecklistItem): HrmsProjectWork | null {
+    const byId = day.hrmsProjectId
+      ? workByProject.find((p) => p.projectId === day.hrmsProjectId)
+      : null;
+    if (byId) return byId;
+    const name = (item.title || day.projectName || "").trim().toLowerCase();
+    if (!name) return null;
+    return (
+      workByProject.find((p) => p.projectName.trim().toLowerCase() === name) ||
+      workByProject.find((p) => p.projectName.toLowerCase().includes(name)) ||
+      null
+    );
+  }
+
+  return (
+    <section>
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <Briefcase className="h-3.5 w-3.5 text-amber-400" />
+        Training work
+      </h3>
+      <p className="mb-3 text-xs text-slate-500">
+        Progress comes from HRMS tracker (hours / production). No tick needed — incomplete work
+        does not block the next day.
+      </p>
+      {workLoading && <p className="mb-2 text-xs text-slate-500">Loading tracker data…</p>}
+      {workMessage && !workLoading && (
+        <p className="mb-2 text-xs text-amber-200/90">{workMessage}</p>
+      )}
+      <ul className="space-y-3">
+        {items.map((item) => {
+          const m = metricsFor(item);
+          return (
+            <li
+              key={item.id}
+              className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3"
+            >
+              <p className="font-medium text-slate-100">{item.title}</p>
+              {item.assignedHours != null && (
+                <p className="mt-0.5 text-sm text-amber-200/90">
+                  Assigned hours: {item.assignedHours}
+                </p>
+              )}
+              {item.description && (
+                <p className="mt-0.5 text-sm text-slate-500">{item.description}</p>
+              )}
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Hours logged</p>
+                  <p className="text-lg font-semibold text-white">
+                    {m?.hoursLogged != null ? m.hoursLogged : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Production</p>
+                  <p className="text-lg font-semibold text-white">
+                    {m?.productionUnits != null ? m.productionUnits : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Quality</p>
+                  <p className="text-lg font-semibold text-white">
+                    {m?.qualityScore != null ? `${m.qualityScore}%` : "—"}
+                  </p>
+                </div>
+              </div>
+              {m?.lastActivityAt && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Last activity: {new Date(m.lastActivityAt).toLocaleString()}
+                </p>
+              )}
+              {m?.message && (
+                <p className="mt-1 text-xs text-slate-500">{m.message}</p>
+              )}
+              {!m && !workLoading && (
+                <p className="mt-2 text-xs text-slate-500">
+                  No HRMS tracker data linked for this project yet.
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -154,6 +271,11 @@ function TickList({
                 >
                   {item.title}
                 </p>
+                {item.assignedHours != null && (
+                  <p className="mt-0.5 text-sm text-amber-200/90">
+                    Assigned hours: {item.assignedHours}
+                  </p>
+                )}
                 {item.description && (
                   <p className="mt-0.5 text-sm text-slate-500">{item.description}</p>
                 )}
@@ -177,6 +299,11 @@ function TickList({
                 >
                   {item.title}
                 </p>
+                {item.assignedHours != null && (
+                  <p className="mt-0.5 text-sm text-amber-200/90">
+                    Assigned hours: {item.assignedHours}
+                  </p>
+                )}
                 {item.description && (
                   <p className="mt-0.5 text-sm text-slate-500">{item.description}</p>
                 )}
@@ -240,11 +367,17 @@ function DayContent({
   readOnly,
   onToggle,
   busyId,
+  workByProject,
+  workLoading,
+  workMessage,
 }: {
   day: DaySnapshot;
   readOnly?: boolean;
   onToggle: (itemId: string, completed: boolean) => void;
   busyId: string | null;
+  workByProject: HrmsProjectWork[];
+  workLoading: boolean;
+  workMessage?: string;
 }) {
   const workItems = day.workItems || [];
   const hasAnything =
@@ -260,7 +393,21 @@ function DayContent({
   }
 
   if (readOnly) {
-    return <DayItemsSummary day={day} />;
+    return (
+      <div className="space-y-6">
+        {(day.checklist.length > 0 || day.lessons.length > 0) && (
+          <DayItemsSummary day={{ ...day, workItems: [] }} />
+        )}
+        {workItems.length > 0 && (
+          <TrainingWorkPanel
+            day={day}
+            workByProject={workByProject}
+            workLoading={workLoading}
+            workMessage={workMessage}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
@@ -284,13 +431,12 @@ function DayContent({
         </section>
       )}
       {workItems.length > 0 && (
-        <section>
-          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <Briefcase className="h-3.5 w-3.5 text-amber-400" />
-            Training work
-          </h3>
-          <TickList items={workItems} onToggle={onToggle} busyId={busyId} />
-        </section>
+        <TrainingWorkPanel
+          day={day}
+          workByProject={workByProject}
+          workLoading={workLoading}
+          workMessage={workMessage}
+        />
       )}
     </div>
   );
@@ -303,6 +449,31 @@ export function TrainingDayClient({ plan: initial }: Props) {
   const [msg, setMsg] = useState("");
   const [viewDayNumber, setViewDayNumber] = useState<number | null>(null);
   const [showAllPast, setShowAllPast] = useState(false);
+  const [workByProject, setWorkByProject] = useState<HrmsProjectWork[]>([]);
+  const [workLoading, setWorkLoading] = useState(false);
+  const [workMessage, setWorkMessage] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      setWorkLoading(true);
+      try {
+        const res = await fetch("/api/hrms/work");
+        const data = await res.json();
+        if (res.ok) {
+          setWorkByProject(data.projects || []);
+          setWorkMessage(data.message || "");
+        } else {
+          setWorkByProject([]);
+          setWorkMessage(data.error || "Could not load HRMS work");
+        }
+      } catch {
+        setWorkByProject([]);
+        setWorkMessage("Could not load HRMS work");
+      } finally {
+        setWorkLoading(false);
+      }
+    })();
+  }, []);
 
   const today = plan.today;
   const pastDays = plan.pastDays ?? [];
@@ -557,6 +728,9 @@ export function TrainingDayClient({ plan: initial }: Props) {
           readOnly={isReviewingPast}
           onToggle={toggleChecklist}
           busyId={busyId}
+          workByProject={workByProject}
+          workLoading={workLoading}
+          workMessage={workMessage}
         />
 
         <LeadReviewCard day={viewing} />

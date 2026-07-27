@@ -123,70 +123,12 @@ export async function GET(req: Request) {
   return NextResponse.json({ projects });
 }
 
-export async function POST(req: Request) {
-  const user = await requireSession(["ADMIN", "TRAINER"]);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const {
-    name,
-    description,
-    categoryId,
-    status,
-    startDate,
-    endDate,
-    priority,
-    resources,
-    documentation,
-    url,
-    active,
-  } = await req.json();
-
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
-  }
-
-  const project = await prisma.project.create({
-    data: {
-      name: name.trim(),
-      description: description?.trim() || null,
-      categoryId: categoryId || null,
-      status: status || "ACTIVE",
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null,
-      priority: priority || "MEDIUM",
-      resources: resources?.trim() || null,
-      documentation: documentation?.trim() || null,
-      url: url?.trim() || null,
-      active: (status || "ACTIVE") === "ACTIVE" && active !== false,
-      createdBy: user.id,
+export async function POST() {
+  return NextResponse.json(
+    {
+      error:
+        "Projects are managed in HRMS. Use GET /api/hrms/projects for the project list.",
     },
-    include: {
-      categoryRel: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      assignments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-  });
-
-  return NextResponse.json({ project });
+    { status: 410 }
+  );
 }

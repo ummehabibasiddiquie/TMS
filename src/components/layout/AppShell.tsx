@@ -64,6 +64,7 @@ const navItems: { section: string; items: NavItem[] }[] = [
     section: "Team Lead",
     items: [
       { href: "/admin/curriculum", label: "Day Curriculum", icon: ClipboardCheck, roles: ["TRAINER"] },
+      { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["TRAINER"] },
       { href: "/trainer/courses", label: "Courses", icon: BookOpen, roles: ["TRAINER"] },
       { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["TRAINER"] },
       { href: "/admin/users", label: "Team Members", icon: Users, roles: ["TRAINER"] },

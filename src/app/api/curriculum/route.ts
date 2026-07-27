@@ -75,6 +75,7 @@ export async function POST(req: Request) {
       ? body.dayType
       : "MIXED";
   const projectName = body.projectName?.trim() || null;
+  const hrmsProjectId = body.hrmsProjectId ? String(body.hrmsProjectId).trim() || null : null;
   const description = body.description?.trim() || null;
   const traineeId = body.traineeId ? String(body.traineeId) : null;
   const scopeBody = body.scope ? String(body.scope) : null;
@@ -115,6 +116,7 @@ export async function POST(req: Request) {
         title,
         dayType,
         projectName,
+        hrmsProjectId: projectName ? hrmsProjectId : null,
         description,
       },
     });

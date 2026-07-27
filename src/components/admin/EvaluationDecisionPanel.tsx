@@ -103,10 +103,11 @@ export function EvaluationDecisionPanel({ canDecide = false }: Props) {
       <div>
         <h2 className="text-lg font-semibold">Evaluation review</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          After day-wise training, the one-attempt final quiz score guides continue / reject.
+          After day-wise training, review schedule completion, HRMS practice-work quality/hours, and
+          the one-attempt final quiz together.
           {canDecide
-            ? " Admin: reject (≤50), +1 week (51–74), or approve (≥90)."
-            : " Team Lead: view only."}
+            ? " Admin may reject, add +1 week, or approve (≥90% quiz required to approve)."
+            : " Team Lead: view only — Admin makes the hire decision."}
         </p>
       </div>
 

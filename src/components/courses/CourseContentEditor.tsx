@@ -16,6 +16,7 @@ import {
   Pencil,
   Upload,
   Download,
+  Loader2,
 } from "lucide-react";
 import { QUIZ_IMPORT_FORMAT_GUIDE } from "@/lib/quiz-import";
 
@@ -70,12 +71,185 @@ type Course = {
 };
 
 const CONTENT_TYPES = [
-  { value: "VIDEO", label: "Video", icon: Video, hint: "Paste YouTube embed URL (e.g. https://www.youtube.com/embed/VIDEO_ID)" },
-  { value: "PDF", label: "PDF Document", icon: FileText, hint: "Paste link to PDF file (SharePoint, Google Drive, or hosted URL)" },
-  { value: "SOP", label: "SOP", icon: BookOpen, hint: "Standard Operating Procedure text" },
-  { value: "PPRT", label: "PPRT", icon: ClipboardList, hint: "Project Process Reference Template text" },
-  { value: "DOCUMENT", label: "Document", icon: FileText, hint: "General document / reading material" },
+  {
+    value: "VIDEO",
+    label: "Video",
+    icon: Video,
+    hint: "Upload a video file (MP4/WebM) or paste a YouTube/Vimeo embed URL",
+  },
+  {
+    value: "PDF",
+    label: "PDF Document",
+    icon: FileText,
+    hint: "Upload a PDF or paste a link (SharePoint, Drive, or hosted URL)",
+  },
+  { value: "SOP", label: "SOP", icon: BookOpen, hint: "Standard Operating Procedure text (optional file upload)" },
+  {
+    value: "PPRT",
+    label: "PPRT",
+    icon: ClipboardList,
+    hint: "Project Process Reference Template text (optional file upload)",
+  },
+  {
+    value: "DOCUMENT",
+    label: "Document",
+    icon: FileText,
+    hint: "Upload a document/PDF or paste text / a link",
+  },
 ];
+
+function acceptForType(contentType: string) {
+  if (contentType === "VIDEO") return "video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.mov";
+  if (contentType === "PDF") return "application/pdf,.pdf";
+  return ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,application/pdf";
+}
+
+function ContentUrlField({
+  contentType,
+  value,
+  onChange,
+  onUploadingChange,
+}: {
+  contentType: string;
+  value: string;
+  onChange: (url: string) => void;
+  onUploadingChange?: (uploading: boolean) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function setBusy(busy: boolean) {
+    setUploading(busy);
+    onUploadingChange?.(busy);
+  }
+
+  function handleUpload(file: File) {
+    setBusy(true);
+    setProgress(0);
+    setError("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      setProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+    };
+
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300 && data.url) {
+          setProgress(100);
+          onChange(data.url);
+        } else {
+          setError(data.error || "Upload failed");
+        }
+      } catch {
+        setError("Upload failed");
+      } finally {
+        setBusy(false);
+        if (inputRef.current) inputRef.current.value = "";
+      }
+    };
+
+    xhr.onerror = () => {
+      setError("Upload failed — check your connection and try again");
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    };
+
+    xhr.send(formData);
+  }
+
+  const isVideo = contentType === "VIDEO";
+  const label = isVideo ? "Video file or URL" : "File or URL";
+
+  return (
+    <div className="space-y-2">
+      <label className="text-xs text-slate-500">{label}</label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className={`flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs ${
+            uploading
+              ? "cursor-not-allowed border-blue-500/50 bg-blue-950/30 text-blue-200"
+              : "cursor-pointer border-slate-600 bg-slate-800/50 text-slate-300 hover:border-blue-500 hover:text-blue-300"
+          }`}
+        >
+          {uploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          <span>{uploading ? "Uploading…" : "Upload file"}</span>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={acceptForType(contentType)}
+            disabled={uploading}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUpload(file);
+            }}
+          />
+        </label>
+        {value && !uploading && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="text-xs text-slate-500 hover:text-red-300"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {uploading && (
+        <div className="rounded-lg border border-blue-500/40 bg-blue-950/30 px-3 py-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm text-blue-200">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+            <span>
+              {isVideo ? "Uploading video…" : "Uploading file…"} {progress}%
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-[width] duration-150"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-400">
+            Large files can take a few minutes — please keep this page open.
+          </p>
+        </div>
+      )}
+
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={uploading}
+        placeholder={
+          isVideo
+            ? "Or paste https://www.youtube.com/embed/… or /uploads/…"
+            : "Or paste a file URL"
+        }
+        className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm disabled:opacity-50"
+      />
+      {value && !uploading && (
+        <p className="truncate text-xs text-emerald-400" title={value}>
+          Ready: {value}
+        </p>
+      )}
+      {error && <p className="text-xs text-red-300">{error}</p>}
+    </div>
+  );
+}
 
 function parseOptions(options: string) {
   try {
@@ -250,34 +424,69 @@ function ModuleTitleEditor({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(module.title);
 
+  function save() {
+    const next = title.trim();
+    if (!next) {
+      alert("Module title is required");
+      return;
+    }
+    onSave(next);
+    setEditing(false);
+  }
+
   return (
-    <div className="flex flex-1 items-center gap-2">
+    <div className="flex flex-1 items-center gap-2 min-w-0">
       {editing ? (
         <>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-1 text-sm"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+              if (e.key === "Escape") {
+                setTitle(module.title);
+                setEditing(false);
+              }
+            }}
+            autoFocus
+            className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-1 text-sm"
           />
+          <button type="button" onClick={save} className="text-xs text-blue-400 hover:text-blue-300">
+            Save
+          </button>
           <button
+            type="button"
             onClick={() => {
-              onSave(title);
+              setTitle(module.title);
               setEditing(false);
             }}
-            className="text-xs text-blue-400"
+            className="text-xs text-slate-500 hover:text-white"
           >
-            Save
+            Cancel
           </button>
         </>
       ) : (
         <>
-          <h3 className="flex-1 font-semibold">{module.title}</h3>
-          <button onClick={() => setEditing(true)} className="text-xs text-slate-500 hover:text-white">
-            Edit
+          <h3 className="min-w-0 flex-1 truncate font-semibold">{module.title}</h3>
+          <button
+            type="button"
+            onClick={() => {
+              setTitle(module.title);
+              setEditing(true);
+            }}
+            title="Edit module"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-blue-300"
+          >
+            <Pencil className="h-4 w-4" />
           </button>
         </>
       )}
-      <button onClick={onDelete} className="text-red-400 hover:text-red-300">
+      <button
+        type="button"
+        onClick={onDelete}
+        title="Delete module"
+        className="rounded-lg p-1.5 text-red-400 hover:bg-slate-700 hover:text-red-300"
+      >
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
@@ -297,23 +506,52 @@ function LessonBlock({
 }) {
   const quizzes = lesson.quizzes ?? [];
   const [showAddContent, setShowAddContent] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
   const [activeQuizId, setActiveQuizId] = useState<string | null>(
     quizzes[0]?.id ?? null
   );
   const [contentForm, setContentForm] = useState({
-    title: "",
     contentType: "VIDEO",
     contentUrl: "",
     contentBody: "",
   });
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [lessonTitle, setLessonTitle] = useState(lesson.title);
 
   const typeInfo = CONTENT_TYPES.find((t) => t.value === contentForm.contentType);
-  const needsUrl = ["VIDEO", "PDF"].includes(contentForm.contentType);
+  const needsUrl = ["VIDEO", "PDF", "DOCUMENT", "SOP", "PPRT"].includes(contentForm.contentType);
   const needsBody = ["SOP", "PPRT", "DOCUMENT"].includes(contentForm.contentType);
+  const urlRequired = ["VIDEO", "PDF"].includes(contentForm.contentType);
+
+  async function saveLessonTitle() {
+    const next = lessonTitle.trim();
+    if (!next) {
+      alert("Lesson title is required");
+      return;
+    }
+    const ok = await onApi("PATCH", `/api/lessons/${lesson.id}`, { title: next });
+    if (ok) setEditingTitle(false);
+  }
 
   async function addContent() {
-    if (!contentForm.title.trim()) {
-      alert("Content title is required");
+    if (urlRequired && !contentForm.contentUrl.trim()) {
+      alert("Upload a file or paste a URL for this content type");
+      return;
+    }
+    if (
+      contentForm.contentType === "DOCUMENT" &&
+      !contentForm.contentUrl.trim() &&
+      !contentForm.contentBody.trim()
+    ) {
+      alert("Upload a document, paste a URL, or enter content text");
+      return;
+    }
+    if (
+      ["SOP", "PPRT"].includes(contentForm.contentType) &&
+      !contentForm.contentBody.trim() &&
+      !contentForm.contentUrl.trim()
+    ) {
+      alert("Enter content text or upload a file");
       return;
     }
     const ok = await onApi("POST", "/api/topics", {
@@ -321,7 +559,7 @@ function LessonBlock({
       ...contentForm,
     });
     if (ok) {
-      setContentForm({ title: "", contentType: "VIDEO", contentUrl: "", contentBody: "" });
+      setContentForm({ contentType: "VIDEO", contentUrl: "", contentBody: "" });
       setShowAddContent(false);
     }
   }
@@ -343,20 +581,73 @@ function LessonBlock({
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800/20 p-4 space-y-4">
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <span className="text-xs text-slate-500">Lesson {index + 1}</span>
-          <p className="font-medium">{lesson.title}</p>
+          {editingTitle ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <input
+                value={lessonTitle}
+                onChange={(e) => setLessonTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveLessonTitle();
+                  if (e.key === "Escape") {
+                    setLessonTitle(lesson.title);
+                    setEditingTitle(false);
+                  }
+                }}
+                autoFocus
+                className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium"
+              />
+              <button
+                type="button"
+                onClick={() => void saveLessonTitle()}
+                disabled={loading}
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLessonTitle(lesson.title);
+                  setEditingTitle(false);
+                }}
+                className="text-xs text-slate-500 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <p className="font-medium">{lesson.title}</p>
+          )}
         </div>
-        <button
-          onClick={() => {
-            if (confirm(`Delete lesson "${lesson.title}"?`)) {
-              onApi("DELETE", `/api/lessons/${lesson.id}`);
-            }
-          }}
-          className="text-red-400"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {!editingTitle && (
+            <button
+              type="button"
+              onClick={() => {
+                setLessonTitle(lesson.title);
+                setEditingTitle(true);
+              }}
+              title="Edit lesson"
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-blue-300"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Delete lesson "${lesson.title}"?`)) {
+                onApi("DELETE", `/api/lessons/${lesson.id}`);
+              }
+            }}
+            title="Delete lesson"
+            className="rounded-lg p-1.5 text-red-400 hover:bg-slate-700 hover:text-red-300"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Content section — always available */}
@@ -377,16 +668,9 @@ function LessonBlock({
           </button>
         ) : (
           <div className="rounded-xl border border-blue-500/40 bg-blue-950/20 p-4 space-y-3">
-            <p className="text-sm font-medium text-blue-300">New content item</p>
-            <div>
-              <label className="text-xs text-slate-500">Content title *</label>
-              <input
-                value={contentForm.title}
-                onChange={(e) => setContentForm({ ...contentForm, title: e.target.value })}
-                placeholder="e.g. REX SOP Document"
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-              />
-            </div>
+            <p className="text-sm font-medium text-blue-300">
+              Add to lesson: {lesson.title}
+            </p>
             <div>
               <label className="text-xs text-slate-500">Content type *</label>
               <select
@@ -405,25 +689,18 @@ function LessonBlock({
               {typeInfo && <p className="mt-1 text-xs text-slate-500">{typeInfo.hint}</p>}
             </div>
             {needsUrl && (
-              <div>
-                <label className="text-xs text-slate-500">URL *</label>
-                <input
-                  value={contentForm.contentUrl}
-                  onChange={(e) =>
-                    setContentForm({ ...contentForm, contentUrl: e.target.value })
-                  }
-                  placeholder={
-                    contentForm.contentType === "VIDEO"
-                      ? "https://www.youtube.com/embed/..."
-                      : "https://...pdf"
-                  }
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                />
-              </div>
+              <ContentUrlField
+                contentType={contentForm.contentType}
+                value={contentForm.contentUrl}
+                onChange={(contentUrl) => setContentForm({ ...contentForm, contentUrl })}
+                onUploadingChange={setFileUploading}
+              />
             )}
             {needsBody && (
               <div>
-                <label className="text-xs text-slate-500">Content text *</label>
+                <label className="text-xs text-slate-500">
+                  Content text{contentForm.contentType === "DOCUMENT" ? " (optional if file uploaded)" : ""}
+                </label>
                 <textarea
                   value={contentForm.contentBody}
                   onChange={(e) =>
@@ -438,10 +715,10 @@ function LessonBlock({
             <div className="flex gap-2">
               <button
                 onClick={addContent}
-                disabled={loading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm hover:bg-blue-500"
+                disabled={loading || fileUploading}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm hover:bg-blue-500 disabled:opacity-50"
               >
-                Save content
+                {fileUploading ? "Waiting for upload…" : "Save content"}
               </button>
               <button
                 onClick={() => setShowAddContent(false)}
@@ -819,15 +1096,17 @@ function TopicCard({
   onApi: (method: string, url: string, body?: object) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
   const [form, setForm] = useState({
-    title: topic.title,
     contentType: topic.contentType,
     contentUrl: topic.contentUrl ?? "",
     contentBody: topic.contentBody ?? "",
   });
 
-  const Icon = CONTENT_TYPES.find((t) => t.value === topic.contentType)?.icon ?? FileText;
-  const needsUrl = ["VIDEO", "PDF"].includes(topic.contentType);
+  const typeInfo = CONTENT_TYPES.find((t) => t.value === topic.contentType);
+  const Icon = typeInfo?.icon ?? FileText;
+  const needsUrl = ["VIDEO", "PDF", "DOCUMENT", "SOP", "PPRT"].includes(form.contentType);
+  const needsBody = ["SOP", "PPRT", "DOCUMENT"].includes(form.contentType);
 
   return (
     <div className="rounded-lg bg-slate-800/50 p-3">
@@ -835,8 +1114,7 @@ function TopicCard({
         <div className="flex items-start gap-3">
           <Icon className="h-5 w-5 shrink-0 text-blue-400" />
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm">{topic.title}</p>
-            <p className="text-xs text-slate-500">{topic.contentType}</p>
+            <p className="font-medium text-sm">{typeInfo?.label ?? topic.contentType}</p>
             {topic.contentUrl && (
               <p className="mt-1 truncate text-xs text-blue-400">{topic.contentUrl}</p>
             )}
@@ -844,25 +1122,27 @@ function TopicCard({
               <p className="mt-1 line-clamp-2 text-xs text-slate-400">{topic.contentBody}</p>
             )}
           </div>
-          <button onClick={() => setEditing(true)} className="text-xs text-slate-500 hover:text-white">
-            Edit
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            title="Edit content"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-blue-300"
+          >
+            <Pencil className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => {
               if (confirm("Delete this content?")) onApi("DELETE", `/api/topics/${topic.id}`);
             }}
-            className="text-red-400"
+            title="Delete content"
+            className="rounded-lg p-1.5 text-red-400 hover:bg-slate-700 hover:text-red-300"
           >
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
       ) : (
         <div className="space-y-2">
-          <input
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
-          />
           <select
             value={form.contentType}
             onChange={(e) => setForm({ ...form, contentType: e.target.value })}
@@ -875,19 +1155,20 @@ function TopicCard({
             ))}
           </select>
           {needsUrl && (
-            <input
+            <ContentUrlField
+              contentType={form.contentType}
               value={form.contentUrl}
-              onChange={(e) => setForm({ ...form, contentUrl: e.target.value })}
-              className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
-              placeholder="URL"
+              onChange={(contentUrl) => setForm({ ...form, contentUrl })}
+              onUploadingChange={setFileUploading}
             />
           )}
-          {!needsUrl && (
+          {needsBody && (
             <textarea
               value={form.contentBody}
               onChange={(e) => setForm({ ...form, contentBody: e.target.value })}
               rows={4}
               className="w-full rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+              placeholder="Optional text content"
             />
           )}
           <div className="flex gap-2">
@@ -896,11 +1177,16 @@ function TopicCard({
                 onApi("PATCH", `/api/topics/${topic.id}`, form);
                 setEditing(false);
               }}
-              className="text-xs text-blue-400"
+              disabled={fileUploading}
+              className="text-xs text-blue-400 disabled:opacity-50"
             >
-              Save
+              {fileUploading ? "Waiting for upload…" : "Save"}
             </button>
-            <button onClick={() => setEditing(false)} className="text-xs text-slate-500">
+            <button
+              onClick={() => setEditing(false)}
+              disabled={fileUploading}
+              className="text-xs text-slate-500 disabled:opacity-50"
+            >
               Cancel
             </button>
           </div>

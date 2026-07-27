@@ -12,10 +12,10 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/AppShell";
 import {
-  ACTIVE_PROJECT,
   ACTIVE_USER,
   PUBLISHED_COURSE,
 } from "@/lib/active-filters";
+import { listHrmsProjects } from "@/lib/hrms";
 
 export default async function Home() {
   const user = await getSession();
@@ -27,9 +27,9 @@ export default async function Home() {
   }
 
   if (user.role === "ADMIN") {
-    const [trainees, projects, courses, pendingCerts] = await Promise.all([
+    const [trainees, hrms, courses, pendingCerts] = await Promise.all([
       prisma.user.count({ where: { role: "TRAINEE", ...ACTIVE_USER } }),
-      prisma.project.count({ where: ACTIVE_PROJECT }),
+      listHrmsProjects({ activeOnly: true }),
       prisma.course.count({ where: PUBLISHED_COURSE }),
       prisma.projectCertification.count({
         where: {
@@ -38,6 +38,7 @@ export default async function Home() {
         },
       }),
     ]);
+    const projects = hrms.projects.length;
 
     return (
       <AppShell user={user}>

@@ -25,6 +25,7 @@ type ChecklistItem = {
   description: string | null;
   sortOrder: number;
   kind?: string;
+  assignedHours?: number | null;
 };
 
 type LessonLink = {
@@ -45,6 +46,7 @@ type CurriculumDay = {
   title: string;
   dayType: string;
   projectName: string | null;
+  hrmsProjectId?: string | null;
   description: string | null;
   checklistItems: ChecklistItem[];
   lessons: LessonLink[];
@@ -83,12 +85,22 @@ export function CurriculumManager() {
     title: "",
     dayType: "MIXED",
     projectName: "",
+    hrmsProjectId: "",
     description: "",
   });
   const [newItem, setNewItem] = useState({ title: "", description: "", kind: "CHECKLIST" });
-  const [newWork, setNewWork] = useState({ title: "", description: "" });
+  const [newWork, setNewWork] = useState({
+    hrmsProjectId: "",
+    title: "",
+    description: "",
+    assignedHours: "",
+  });
   const [lessonPick, setLessonPick] = useState("");
   const [traineePercent, setTraineePercent] = useState<number | null>(null);
+  const [hrmsProjects, setHrmsProjects] = useState<
+    { id: string; name: string; code: string | null; categoryName: string | null }[]
+  >([]);
+  const [hrmsMsg, setHrmsMsg] = useState("");
 
   const isExtraWeekDefault = scheduleKey === "__EXTRA_WEEK__";
   const traineeId = isExtraWeekDefault ? "" : scheduleKey;
@@ -149,6 +161,33 @@ export function CurriculumManager() {
     setTrainees(rows);
   }, []);
 
+  const loadHrmsProjects = useCallback(async () => {
+    const res = await fetch("/api/hrms/projects?activeOnly=true");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setHrmsMsg(data.error || "Could not load HRMS projects");
+      setHrmsProjects([]);
+      return;
+    }
+    if (data.message) setHrmsMsg(data.message);
+    else setHrmsMsg("");
+    setHrmsProjects(
+      (data.projects || []).map(
+        (p: {
+          id: string;
+          name: string;
+          code: string | null;
+          categoryName: string | null;
+        }) => ({
+          id: p.id,
+          name: p.name,
+          code: p.code,
+          categoryName: p.categoryName,
+        })
+      )
+    );
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -156,7 +195,8 @@ export function CurriculumManager() {
   useEffect(() => {
     void loadLessons();
     void loadTrainees();
-  }, [loadLessons, loadTrainees]);
+    void loadHrmsProjects();
+  }, [loadLessons, loadTrainees, loadHrmsProjects]);
 
   useEffect(() => {
     const fromUrl = searchParams.get("traineeId");
@@ -191,6 +231,7 @@ export function CurriculumManager() {
       title: nextNum === 1 ? "Day 1 — Onboarding" : `Day ${nextNum}`,
       dayType: "MIXED",
       projectName: "",
+      hrmsProjectId: "",
       description: "",
     });
     setEditing(true);
@@ -207,6 +248,7 @@ export function CurriculumManager() {
       title: day.title,
       dayType: day.dayType,
       projectName: day.projectName || "",
+      hrmsProjectId: day.hrmsProjectId || "",
       description: day.description || "",
     });
     setEditing(true);
@@ -221,6 +263,7 @@ export function CurriculumManager() {
       title: form.title,
       dayType: form.dayType,
       projectName: form.projectName || null,
+      hrmsProjectId: form.hrmsProjectId || null,
       description: form.description || null,
     };
     if (isExtraWeekDefault) payload.scope = "EXTRA_WEEK";
@@ -289,7 +332,7 @@ export function CurriculumManager() {
     if (!traineeId) return;
     if (
       !confirm(
-        "Remove this trainee’s personal schedule and switch them back to the default for everyone?"
+        "Replace this trainee’s schedule with a fresh copy of the current default schedule? Their custom day edits will be lost."
       )
     ) {
       return;
@@ -306,7 +349,7 @@ export function CurriculumManager() {
       setMsg(data.error || "Reset failed");
       return;
     }
-    setMsg("Trainee is back on the default schedule.");
+    setMsg("Schedule reset to a fresh copy of the default. You can customize it again for this trainee.");
     setEditing(false);
     await load();
     await loadTrainees();
@@ -345,11 +388,29 @@ export function CurriculumManager() {
 
   async function addChecklistItem(kind: "CHECKLIST" | "WORK" = "CHECKLIST") {
     if (!selected || !canEdit) return;
+    const hoursRaw = newWork.assignedHours.trim();
+    const hoursNum = hoursRaw === "" ? null : Number(hoursRaw);
+    if (kind === "WORK" && hoursRaw !== "" && (!Number.isFinite(hoursNum) || (hoursNum ?? 0) < 0)) {
+      setMsg("Assigned hours must be a valid number");
+      return;
+    }
     const payload =
       kind === "WORK"
-        ? { title: newWork.title, description: newWork.description, kind: "WORK" }
+        ? {
+            title: newWork.title,
+            description: newWork.description,
+            kind: "WORK",
+            assignedHours: hoursNum,
+          }
         : { title: newItem.title, description: newItem.description, kind: "CHECKLIST" };
-    if (!payload.title.trim()) return;
+    if (!payload.title.trim()) {
+      if (kind === "WORK") setMsg("Select a project for this training work");
+      return;
+    }
+    if (kind === "WORK" && (hoursNum == null || hoursNum <= 0)) {
+      setMsg("Enter assigned working hours for this training work");
+      return;
+    }
     const res = await fetch(`/api/curriculum/${selected.id}/checklist`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -360,8 +421,21 @@ export function CurriculumManager() {
       setMsg(data.error || "Failed to add item");
       return;
     }
-    if (kind === "WORK") setNewWork({ title: "", description: "" });
-    else setNewItem({ title: "", description: "", kind: "CHECKLIST" });
+    if (kind === "WORK") {
+      if (newWork.hrmsProjectId && !selected.hrmsProjectId) {
+        await fetch(`/api/curriculum/${selected.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hrmsProjectId: newWork.hrmsProjectId,
+            projectName: newWork.title,
+          }),
+        });
+      }
+      setNewWork({ hrmsProjectId: "", title: "", description: "", assignedHours: "" });
+    } else {
+      setNewItem({ title: "", description: "", kind: "CHECKLIST" });
+    }
     await load();
   }
 
@@ -418,8 +492,9 @@ export function CurriculumManager() {
         <div>
           <h1 className="text-2xl font-bold">Day-wise curriculum</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Default schedule for everyone, Extra week default (copied when someone gets +1 week),
-            or a personal copy for one trainee.
+            Build the default schedule once — it is assigned to every new trainee automatically.
+            Open a trainee to customize their copy. Extra week default is used only when you extend
+            someone. Attach an HRMS project on a day for practice-work tracking.
           </p>
         </div>
         {canEdit && (
@@ -449,7 +524,7 @@ export function CurriculumManager() {
             }}
             className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
           >
-            <option value="">Default (all trainees)</option>
+            <option value="">Default template (copied to new trainees)</option>
             <option value="__EXTRA_WEEK__">Extra week default</option>
             {trainees.map((t) => (
               <option key={t.id} value={t.id}>
@@ -485,7 +560,7 @@ export function CurriculumManager() {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
               >
                 <RotateCcw className="h-4 w-4" />
-                Reset to default
+                Reset to default copy
               </button>
             )}
             {traineeId && traineePercent != null && traineePercent < 90 ? (
@@ -524,7 +599,7 @@ export function CurriculumManager() {
         >
           {isCustom
             ? `Editing personal schedule for ${traineeLabel}. Changes do not affect other trainees.`
-            : `${traineeLabel} uses the default schedule (preview below). Click “Customize for this trainee” to make a personal copy you can edit.`}
+            : `${traineeLabel} does not have a personal schedule yet. Click “Customize for this trainee” to assign a copy of the default you can edit.`}
         </p>
       )}
 
@@ -611,7 +686,7 @@ export function CurriculumManager() {
                   </p>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs text-slate-400">Title</label>
+                  <label className="text-xs text-slate-400">Day title</label>
                   <input
                     value={form.title}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -619,13 +694,58 @@ export function CurriculumManager() {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs text-slate-400">Project name (optional)</label>
-                  <input
-                    value={form.projectName}
-                    onChange={(e) => setForm({ ...form, projectName: e.target.value })}
-                    placeholder="e.g. Landscaping"
+                  <label className="text-xs text-slate-400">
+                    Project to work on
+                  </label>
+                  <select
+                    value={form.hrmsProjectId || (form.projectName ? `__name:${form.projectName}` : "")}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v) {
+                        setForm({ ...form, projectName: "", hrmsProjectId: "" });
+                        return;
+                      }
+                      if (v.startsWith("__name:")) {
+                        setForm({
+                          ...form,
+                          projectName: v.slice("__name:".length),
+                          hrmsProjectId: "",
+                        });
+                        return;
+                      }
+                      const p = hrmsProjects.find((x) => x.id === v);
+                      setForm({
+                        ...form,
+                        hrmsProjectId: v,
+                        projectName: p?.name || form.projectName,
+                      });
+                    }}
                     className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2"
-                  />
+                  >
+                    <option value="">No project selected</option>
+                    {form.projectName &&
+                      !form.hrmsProjectId &&
+                      !hrmsProjects.some((p) => p.name === form.projectName) && (
+                        <option value={`__name:${form.projectName}`}>
+                          {form.projectName} (saved)
+                        </option>
+                      )}
+                    {hrmsProjects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                        {p.code && p.code !== p.name ? ` (${p.code})` : ""}
+                        {p.categoryName ? ` · ${p.categoryName}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {hrmsMsg ? (
+                    <p className="mt-1 text-[11px] text-amber-300/90">{hrmsMsg}</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Choose the HRMS project trainees work on for this day. Progress uses this
+                      for practice-work tracking.
+                    </p>
+                  )}
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-xs text-slate-400">Description</label>
@@ -848,7 +968,9 @@ export function CurriculumManager() {
                         Training work
                       </h3>
                       <p className="mb-3 text-xs text-slate-500">
-                        Hands-on practice tasks for this day (after checklist / videos, or alongside).
+                        Pick the HRMS project and assigned hours. Trainees do not tick this off —
+                        progress is calculated from HRMS tracker, and incomplete work does not block
+                        the next day.
                       </p>
                       <ul className="mb-4 space-y-2">
                         {workOnly.map((item) => (
@@ -858,6 +980,11 @@ export function CurriculumManager() {
                           >
                             <div>
                               <p className="font-medium">{item.title}</p>
+                              {item.assignedHours != null && (
+                                <p className="text-xs text-amber-200/90">
+                                  Assigned hours: {item.assignedHours}
+                                </p>
+                              )}
                               {item.description && (
                                 <p className="text-xs text-slate-500">{item.description}</p>
                               )}
@@ -879,21 +1006,64 @@ export function CurriculumManager() {
                       </ul>
                       {canEdit && (
                         <div className="space-y-2">
-                          <input
-                            value={newWork.title}
-                            onChange={(e) =>
-                              setNewWork({ ...newWork, title: e.target.value })
-                            }
-                            placeholder="Training work title"
-                            className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
-                          />
+                          <div>
+                            <label className="text-xs text-slate-400">
+                              Project to work on *
+                            </label>
+                            <select
+                              value={newWork.hrmsProjectId}
+                              onChange={(e) => {
+                                const id = e.target.value;
+                                const p = hrmsProjects.find((x) => x.id === id);
+                                setNewWork({
+                                  ...newWork,
+                                  hrmsProjectId: id,
+                                  title: p?.name || "",
+                                });
+                              }}
+                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
+                            >
+                              <option value="">Select project…</option>
+                              {hrmsProjects.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                  {p.code && p.code !== p.name ? ` (${p.code})` : ""}
+                                  {p.categoryName ? ` · ${p.categoryName}` : ""}
+                                </option>
+                              ))}
+                            </select>
+                            {hrmsMsg && (
+                              <p className="mt-1 text-[11px] text-amber-300/90">{hrmsMsg}</p>
+                            )}
+                            {hrmsProjects.length === 0 && !hrmsMsg && (
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                No HRMS projects loaded yet.
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-400">
+                              Assigned working hours *
+                            </label>
+                            <input
+                              type="number"
+                              min={0.5}
+                              step={0.5}
+                              value={newWork.assignedHours}
+                              onChange={(e) =>
+                                setNewWork({ ...newWork, assignedHours: e.target.value })
+                              }
+                              placeholder="e.g. 4"
+                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
+                            />
+                          </div>
                           <div className="flex flex-col gap-2 sm:flex-row">
                             <input
                               value={newWork.description}
                               onChange={(e) =>
                                 setNewWork({ ...newWork, description: e.target.value })
                               }
-                              placeholder="Instructions (optional)"
+                              placeholder="Work instructions (optional)"
                               className="flex-1 rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
                             />
                             <button

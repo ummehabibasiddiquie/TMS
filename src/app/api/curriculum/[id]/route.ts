@@ -46,6 +46,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     title?: string;
     dayType?: string;
     projectName?: string | null;
+    hrmsProjectId?: string | null;
     description?: string | null;
   } = {};
 
@@ -69,6 +70,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.projectName !== undefined) {
     data.projectName = body.projectName?.trim() || null;
+  }
+  if (body.hrmsProjectId !== undefined) {
+    data.hrmsProjectId = body.hrmsProjectId ? String(body.hrmsProjectId).trim() || null : null;
+  }
+  if (data.projectName === null) {
+    data.hrmsProjectId = null;
   }
   if (body.description !== undefined) {
     data.description = body.description?.trim() || null;

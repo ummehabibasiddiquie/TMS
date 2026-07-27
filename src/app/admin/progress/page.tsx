@@ -16,9 +16,9 @@ export default async function AdminProgressPage() {
       <div>
         <h1 className="text-3xl font-bold">Team progress</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Day-wise training completion, then a final quiz as one evaluation input. Admin decides
-          using overall performance.
-          After approval, tracker shows production work.
+          Learning progress from the day schedule, plus HRMS practice-work metrics for projects
+          Lead/Admin attach on training days. Final quiz is one input; Admin decides from the full
+          picture. After approval, production tracker shows live work.
         </p>
       </div>
       <CurriculumProgressPanel />

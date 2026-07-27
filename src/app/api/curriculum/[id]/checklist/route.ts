@@ -17,6 +17,19 @@ export async function POST(req: Request, ctx: Ctx) {
   const day = await prisma.curriculumDay.findUnique({ where: { id: dayId } });
   if (!day) return NextResponse.json({ error: "Day not found" }, { status: 404 });
 
+  const isWork = body.kind === "WORK";
+  let assignedHours: number | null = null;
+  if (isWork && body.assignedHours != null && body.assignedHours !== "") {
+    const n = Number(body.assignedHours);
+    if (!Number.isFinite(n) || n <= 0) {
+      return NextResponse.json(
+        { error: "Assigned hours must be a positive number" },
+        { status: 400 }
+      );
+    }
+    assignedHours = n;
+  }
+
   const maxOrder = await prisma.curriculumChecklistItem.aggregate({
     where: { dayId },
     _max: { sortOrder: true },
@@ -27,7 +40,8 @@ export async function POST(req: Request, ctx: Ctx) {
       dayId,
       title,
       description: body.description?.trim() || null,
-      kind: body.kind === "WORK" ? "WORK" : "CHECKLIST",
+      kind: isWork ? "WORK" : "CHECKLIST",
+      assignedHours: isWork ? assignedHours : null,
       sortOrder: body.sortOrder ?? (maxOrder._max.sortOrder ?? 0) + 1,
     },
   });

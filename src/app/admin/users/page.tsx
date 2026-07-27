@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { UsersClient } from "./UsersClient";
 import { backfillMissingTraineeProfiles } from "@/lib/trainee-profile";
+import { backfillDefaultCurriculumForTrainees } from "@/lib/day-wise-training";
 
 function toDateString(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -27,6 +28,12 @@ export default async function AdminUsersPage() {
     await backfillMissingTraineeProfiles();
   } catch (error) {
     console.error("Trainee profile backfill failed:", error);
+  }
+
+  try {
+    await backfillDefaultCurriculumForTrainees();
+  } catch (error) {
+    console.error("Default curriculum backfill failed:", error);
   }
 
   const users = await prisma.user.findMany({

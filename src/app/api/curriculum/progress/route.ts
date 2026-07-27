@@ -1,12 +1,39 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getDayWisePlan } from "@/lib/day-wise-training";
+import {
+  getDayWisePlan,
+  listCurriculumDays,
+  resolveCurriculumScope,
+} from "@/lib/day-wise-training";
 import { getTraineeEvaluationScore } from "@/lib/final-evaluation";
+import {
+  collectPracticeProjectsFromDays,
+  hasPracticeWorkOnSchedule,
+  listHrmsWorkForTraineeProjects,
+} from "@/lib/hrms-work";
+
+function resolvePhase(args: {
+  readyForProduction: boolean;
+  trainingStatus: string | null;
+  scheduleComplete: boolean;
+  hasPractice: boolean;
+}): string {
+  if (args.readyForProduction || args.trainingStatus === "APPROVED_IN_ORG") {
+    return "APPROVED_IN_ORG";
+  }
+  if (args.trainingStatus === "REJECTED") return "REJECTED";
+  if (args.scheduleComplete || args.trainingStatus === "AWAITING_EVALUATION") {
+    return "AWAITING_EVALUATION";
+  }
+  if (args.trainingStatus === "EXTENDED" || args.hasPractice) {
+    return "PRACTICE_WORK";
+  }
+  return "LEARNING";
+}
 
 /**
- * Admin/TL: day-wise progress + final evaluation scores for trainees.
- * TRAINER sees assigned trainees; ADMIN sees all trainees.
+ * Admin/TL: day-wise progress + HRMS work (practice projects) + final evaluation.
  */
 export async function GET(req: Request) {
   const user = await requireSession(["ADMIN", "TRAINER"]);
@@ -26,16 +53,52 @@ export async function GET(req: Request) {
     }
     const trainee = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true, role: true, active: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        employeeId: true,
+        role: true,
+        active: true,
+      },
     });
     if (!trainee || trainee.role !== "TRAINEE") {
       return NextResponse.json({ error: "Trainee not found" }, { status: 404 });
     }
-    const [plan, evaluation] = await Promise.all([
+    const [plan, evaluation, scope] = await Promise.all([
       getDayWisePlan(userId),
       getTraineeEvaluationScore(userId),
+      resolveCurriculumScope(userId),
     ]);
-    return NextResponse.json({ trainee, plan, evaluation });
+    const days = await listCurriculumDays(scope.scopeKey);
+    const practiceProjects = collectPracticeProjectsFromDays(days);
+    const hasPractice = hasPracticeWorkOnSchedule(days);
+    const work = await listHrmsWorkForTraineeProjects(
+      { email: trainee.email, employeeId: trainee.employeeId, name: trainee.name },
+      practiceProjects
+    );
+    const currentPhase = resolvePhase({
+      readyForProduction: plan.readyForProduction,
+      trainingStatus: plan.trainingStatus,
+      scheduleComplete: plan.scheduleComplete,
+      hasPractice,
+    });
+
+    return NextResponse.json({
+      trainee,
+      plan,
+      evaluation,
+      currentPhase,
+      practiceProjects,
+      workByProject: work.projects,
+      workSummary: work.totals,
+      workMeta: {
+        configured: work.configured,
+        connected: work.connected,
+        hrmsUserId: work.hrmsUserId,
+        message: work.message,
+      },
+    });
   }
 
   const where =
@@ -43,13 +106,13 @@ export async function GET(req: Request) {
       ? { role: "TRAINEE" as const, traineeProfile: { trainerId: user.id } }
       : { role: "TRAINEE" as const };
 
-  // Include inactive (rejected) so Admin still sees decision history
   const trainees = await prisma.user.findMany({
     where,
     select: {
       id: true,
       name: true,
       email: true,
+      employeeId: true,
       active: true,
       traineeProfile: {
         select: {
@@ -66,11 +129,19 @@ export async function GET(req: Request) {
 
   const rows = await Promise.all(
     trainees.map(async (t) => {
-      const [plan, customCount, evaluation] = await Promise.all([
+      const [plan, customCount, evaluation, scope] = await Promise.all([
         getDayWisePlan(t.id),
         prisma.curriculumDay.count({ where: { scopeKey: t.id } }),
         getTraineeEvaluationScore(t.id),
+        resolveCurriculumScope(t.id),
       ]);
+      const days = await listCurriculumDays(scope.scopeKey);
+      const practiceProjects = collectPracticeProjectsFromDays(days);
+      const hasPractice = hasPracticeWorkOnSchedule(days);
+      const work = await listHrmsWorkForTraineeProjects(
+        { email: t.email, employeeId: t.employeeId, name: t.name },
+        practiceProjects
+      );
 
       const score = evaluation.score;
       const canExtendWeek =
@@ -78,6 +149,13 @@ export async function GET(req: Request) {
         t.traineeProfile?.trainingStatus !== "REJECTED" &&
         t.traineeProfile?.trainingStatus !== "APPROVED_IN_ORG" &&
         (score == null || score < 90);
+
+      const currentPhase = resolvePhase({
+        readyForProduction: plan.readyForProduction,
+        trainingStatus: plan.trainingStatus,
+        scheduleComplete: plan.scheduleComplete,
+        hasPractice,
+      });
 
       return {
         id: t.id,
@@ -88,6 +166,7 @@ export async function GET(req: Request) {
         totalDays: plan.totalDays,
         plannedDays: plan.plannedDays,
         overallPercent: plan.overallPercent,
+        learningPercent: plan.overallPercent,
         scheduleComplete: plan.scheduleComplete,
         todayTitle: plan.today?.title ?? null,
         todayDone: plan.today?.done ?? false,
@@ -100,6 +179,16 @@ export async function GET(req: Request) {
         finalQuizAttemptedAt: evaluation.attemptedAt,
         evaluationCycle: evaluation.cycle,
         band: evaluation.band,
+        currentPhase,
+        hasPracticeWork: hasPractice,
+        practiceProjects,
+        workByProject: work.projects,
+        workSummary: work.totals,
+        workMeta: {
+          configured: work.configured,
+          connected: work.connected,
+          message: work.message,
+        },
       };
     })
   );

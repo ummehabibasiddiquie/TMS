@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, X, FolderOpen, Image as ImageIcon, Upload, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, X, FolderOpen, Upload } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
 
 type Course = {
@@ -97,6 +97,48 @@ export function CourseManager({
       setError(data.error || "Failed to save");
       return;
     }
+
+    const saved = data.course as {
+      id: string;
+      title: string;
+      description: string | null;
+      thumbnail: string | null;
+      published: boolean;
+      modules?: { lessons?: unknown[]; _count?: { lessons: number } }[];
+      _count?: { enrollments: number };
+    };
+
+    if (modal === "create" && saved) {
+      setCourses((list) => [
+        {
+          id: saved.id,
+          title: saved.title,
+          description: saved.description,
+          thumbnail: saved.thumbnail,
+          published: saved.published,
+          modules: (saved.modules ?? []).map((m) => ({
+            _count: { lessons: m._count?.lessons ?? m.lessons?.length ?? 0 },
+          })),
+          _count: { enrollments: saved._count?.enrollments ?? 0 },
+        },
+        ...list,
+      ]);
+    } else if (modal === "edit" && editing && saved) {
+      setCourses((list) =>
+        list.map((c) =>
+          c.id === editing.id
+            ? {
+                ...c,
+                title: saved.title,
+                description: saved.description,
+                thumbnail: saved.thumbnail,
+                published: saved.published,
+              }
+            : c
+        )
+      );
+    }
+
     setModal(null);
     router.refresh();
   }
@@ -154,12 +196,6 @@ export function CourseManager({
                   <FolderOpen className="h-4 w-4" />
                   Manage Content
                 </Link>
-                <ActionButton
-                  icon={UserPlus}
-                  label="Assign users"
-                  onClick={() => router.push(`/admin/users`)}
-                  variant="edit"
-                />
                 <span
                   className={`rounded-full px-3 py-1 text-xs ${
                     c.published

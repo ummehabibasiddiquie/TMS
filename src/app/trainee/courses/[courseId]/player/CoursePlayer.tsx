@@ -11,10 +11,119 @@ import {
   FileText,
   StickyNote,
   BarChart2,
+  Loader2,
 } from "lucide-react";
 import { ProgressRing } from "@/components/learning/ProgressRing";
 import { LessonQuizExam } from "@/components/learning/LessonQuizExam";
 import { cn } from "@/lib/utils";
+
+function isUploadedOrDirectMedia(url: string) {
+  return /\.(mp4|webm|ogg|mov|avi)(\?|#|$)/i.test(url);
+}
+
+function isPdfUrl(url: string) {
+  return /\.pdf(\?|#|$)/i.test(url);
+}
+
+function UploadedVideoPlayer({ url, title }: { url: string; title: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  return (
+    <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+      {loading && !error && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80 text-slate-200">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+          <p className="text-sm">Loading video…</p>
+        </div>
+      )}
+      {error ? (
+        <div className="flex h-full items-center justify-center p-6 text-center text-sm text-red-300">
+          Video could not be loaded. Try opening the file again or re-upload it.
+        </div>
+      ) : (
+        <video
+          src={url}
+          controls
+          className="h-full w-full"
+          title={title}
+          onLoadStart={() => {
+            setLoading(true);
+            setError(false);
+          }}
+          onWaiting={() => setLoading(true)}
+          onCanPlay={() => setLoading(false)}
+          onPlaying={() => setLoading(false)}
+          onError={() => {
+            setLoading(false);
+            setError(true);
+          }}
+        >
+          Your browser does not support video playback.
+        </video>
+      )}
+    </div>
+  );
+}
+
+function TopicMedia({ topic }: { topic: Topic }) {
+  const url = topic.contentUrl?.trim() || "";
+
+  if (topic.contentType === "VIDEO" && url) {
+    if (isUploadedOrDirectMedia(url)) {
+      return <UploadedVideoPlayer url={url} title={topic.title} />;
+    }
+    return (
+      <div className="aspect-video overflow-hidden rounded-xl bg-black">
+        <iframe
+          src={url}
+          className="h-full w-full"
+          allowFullScreen
+          title={topic.title}
+        />
+      </div>
+    );
+  }
+
+  if (["SOP", "PPRT", "DOCUMENT", "TEXT", "PDF"].includes(topic.contentType)) {
+    return (
+      <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6 space-y-4">
+        <span className="inline-block rounded bg-blue-600/20 px-2 py-0.5 text-xs text-blue-300">
+          {topic.contentType}
+        </span>
+        {url && (
+          <div className="space-y-2">
+            {(isPdfUrl(url) || topic.contentType === "PDF") && (
+              <iframe
+                src={url}
+                className="h-[70vh] w-full rounded-lg border border-slate-700 bg-white"
+                title={topic.contentType}
+              />
+            )}
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block text-sm text-blue-400 hover:underline"
+            >
+              Open / download file
+            </a>
+          </div>
+        )}
+        {topic.contentBody && (
+          <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300">
+            {topic.contentBody}
+          </pre>
+        )}
+        {!url && !topic.contentBody && (
+          <p className="text-sm text-slate-500">No content attached yet.</p>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
 
 type Topic = {
   id: string;
@@ -338,31 +447,7 @@ export function CoursePlayer({
                 ) : (
                   activeLesson.topics.map((topic) => (
                     <div key={topic.id}>
-                      {topic.contentType === "VIDEO" && topic.contentUrl && (
-                        <div className="aspect-video overflow-hidden rounded-xl bg-black">
-                          <iframe
-                            src={topic.contentUrl}
-                            className="h-full w-full"
-                            allowFullScreen
-                            title={topic.title}
-                          />
-                        </div>
-                      )}
-                      {(topic.contentType === "PDF" ||
-                        topic.contentType === "SOP" ||
-                        topic.contentType === "PPRT" ||
-                        topic.contentType === "DOCUMENT" ||
-                        topic.contentType === "TEXT") && (
-                        <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
-                          <span className="mb-2 inline-block rounded bg-blue-600/20 px-2 py-0.5 text-xs text-blue-300">
-                            {topic.contentType}
-                          </span>
-                          <h3 className="text-lg font-semibold">{topic.title}</h3>
-                          <pre className="mt-4 whitespace-pre-wrap font-sans text-sm text-slate-300">
-                            {topic.contentBody}
-                          </pre>
-                        </div>
-                      )}
+                      <TopicMedia topic={topic} />
                     </div>
                   ))
                 )}
@@ -533,7 +618,8 @@ export function CoursePlayer({
               <ul className="space-y-2 text-sm">
                 {activeLesson.topics.map((t) => (
                   <li key={t.id} className="rounded-lg bg-slate-800/40 px-3 py-2">
-                    {t.title} ({t.contentType})
+                    {t.contentType}
+                    {t.contentUrl ? " · file attached" : t.contentBody ? " · text" : ""}
                   </li>
                 ))}
               </ul>

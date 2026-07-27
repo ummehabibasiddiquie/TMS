@@ -173,9 +173,9 @@ model QuizQuestion {
   id          String @id @default(cuid())
   quizId      String?
   quiz        Quiz?  @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  question    String
-  options     String
-  correct     String
+  question    String @db.Text
+  options     String @db.Text
+  correct     String @db.Text
   order       Int    @default(0)
 
   @@index([quizId], map: "QuizQuestion_quizId_fkey")
@@ -362,6 +362,8 @@ model CurriculumDay {
   /// MIXED = checklist + lessons + work; CHECKLIST / TRAINING kept as focus labels
   dayType     String   @default("MIXED")
   projectName String?
+  /// HRMS mytfs.project.project_id when a practice project is attached to this day
+  hrmsProjectId String?
   description String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -371,6 +373,7 @@ model CurriculumDay {
 
   @@unique([scopeKey, dayNumber])
   @@index([scopeKey])
+  @@index([hrmsProjectId])
 }
 
 model CurriculumChecklistItem {
@@ -380,6 +383,8 @@ model CurriculumChecklistItem {
   description String?  @db.Text
   /// CHECKLIST = onboarding ticks; WORK = hands-on training tasks
   kind        String   @default("CHECKLIST")
+  /// Assigned working hours for WORK items (shown to trainee)
+  assignedHours Float?
   sortOrder   Int      @default(0)
   day         CurriculumDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
   progress    UserChecklistProgress[]

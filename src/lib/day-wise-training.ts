@@ -27,6 +27,8 @@ export type DayChecklistItem = {
   sortOrder: number;
   /** CHECKLIST = tick tasks; WORK = hands-on training work */
   kind: "CHECKLIST" | "WORK";
+  /** Assigned hours for WORK items */
+  assignedHours: number | null;
   completed: boolean;
 };
 
@@ -35,6 +37,7 @@ export type DaySnapshot = {
   title: string;
   dayType: "CHECKLIST" | "TRAINING" | "MIXED";
   projectName: string | null;
+  hrmsProjectId: string | null;
   description: string | null;
   checklist: DayChecklistItem[];
   /** Hands-on training work items (subset of checklist with kind WORK) */
@@ -109,6 +112,7 @@ async function buildDaySnapshot(
     title: string;
     dayType: string;
     projectName: string | null;
+    hrmsProjectId?: string | null;
     description: string | null;
     checklistItems: {
       id: string;
@@ -116,6 +120,7 @@ async function buildDaySnapshot(
       description: string | null;
       sortOrder: number;
       kind?: string;
+      assignedHours?: number | null;
       progress: { completed: boolean }[];
     }[];
     lessons: {
@@ -140,6 +145,10 @@ async function buildDaySnapshot(
       description: item.description,
       sortOrder: item.sortOrder,
       kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
+      assignedHours:
+        item.assignedHours != null && Number.isFinite(Number(item.assignedHours))
+          ? Number(item.assignedHours)
+          : null,
       completed: item.progress[0]?.completed === true,
     }));
 
@@ -164,11 +173,12 @@ async function buildDaySnapshot(
       };
     });
 
-  // Mixed day: checklist + training work + lessons all count toward completion
+  // Only checklist + courses gate day completion. Training work is tracked via HRMS
+  // and never blocks unlocking the next day.
   const completedCount =
-    allTicks.filter((c) => c.completed).length +
+    checklist.filter((c) => c.completed).length +
     lessons.filter((l) => l.completed).length;
-  const totalCount = allTicks.length + lessons.length;
+  const totalCount = checklist.length + lessons.length;
 
   let dayType: DaySnapshot["dayType"] = "MIXED";
   if (day.dayType === "CHECKLIST" || day.dayType === "TRAINING" || day.dayType === "MIXED") {
@@ -186,14 +196,17 @@ async function buildDaySnapshot(
     title: day.title,
     dayType,
     projectName: day.projectName,
+    hrmsProjectId: day.hrmsProjectId ?? null,
     description: day.description,
     checklist,
     workItems,
     lessons,
     completedCount,
     totalCount,
-    percent: toPercent(completedCount, totalCount),
-    done: totalCount > 0 && completedCount === totalCount,
+    // Work-only days have no gate items — show 100% so UI doesn’t look “stuck”
+    percent: totalCount === 0 ? 100 : toPercent(completedCount, totalCount),
+    // Empty gate (work-only / empty day) does not block — next day still opens
+    done: totalCount === 0 || completedCount === totalCount,
     review: null,
   };
 }
@@ -429,12 +442,14 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
           title: day.title,
           dayType: day.dayType,
           projectName: day.projectName,
+          hrmsProjectId: day.hrmsProjectId,
           description: day.description,
           checklistItems: {
             create: day.checklistItems.map((item) => ({
               title: item.title,
               description: item.description,
               kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
+              assignedHours: "assignedHours" in item ? item.assignedHours ?? null : null,
               sortOrder: item.sortOrder,
             })),
           },
@@ -453,9 +468,51 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
   return { created: true, days: await listCurriculumDays(traineeId) };
 }
 
-/** Remove personal schedule so trainee falls back to GLOBAL default. */
+/** Remove personal schedule and re-copy the current GLOBAL default onto this trainee. */
 export async function resetTraineeCurriculumToDefault(traineeId: string) {
   await prisma.curriculumDay.deleteMany({ where: { scopeKey: traineeId } });
+  return enableCustomCurriculumForTrainee(traineeId);
+}
+
+/**
+ * Ensure every trainee has a personal copy of the default schedule.
+ * Safe to call on Users / Curriculum page load. Skips trainees who already have a custom schedule.
+ */
+export async function backfillDefaultCurriculumForTrainees() {
+  const globalCount = await prisma.curriculumDay.count({
+    where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
+  });
+  if (globalCount === 0) return { assigned: 0, skipped: 0 };
+
+  const trainees = await prisma.user.findMany({
+    where: { role: "TRAINEE", active: true },
+    select: { id: true },
+  });
+  if (trainees.length === 0) return { assigned: 0, skipped: 0 };
+
+  const customScopes = await prisma.curriculumDay.findMany({
+    where: { scopeKey: { in: trainees.map((t) => t.id) } },
+    select: { scopeKey: true },
+    distinct: ["scopeKey"],
+  });
+  const hasCustom = new Set(customScopes.map((c) => c.scopeKey));
+
+  let assigned = 0;
+  let skipped = 0;
+  for (const t of trainees) {
+    if (hasCustom.has(t.id)) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      const result = await enableCustomCurriculumForTrainee(t.id);
+      if (result.created) assigned += 1;
+      else skipped += 1;
+    } catch (e) {
+      console.error(`Default curriculum assign failed for ${t.id}:`, e);
+    }
+  }
+  return { assigned, skipped };
 }
 
 /** Append extra training days from the EXTRA_WEEK default template (personal schedule only). */
@@ -520,6 +577,7 @@ export async function extendTraineeCurriculumByWeek(
           title: `Day ${i + 1} — Extra training`,
           dayType: "MIXED",
           projectName: null as string | null,
+          hrmsProjectId: null as string | null,
           description:
             "Extra week day (no default template content yet). Add checklist, courses, and work as needed.",
           checklistItems: [] as {
@@ -545,12 +603,14 @@ export async function extendTraineeCurriculumByWeek(
           title: day.title,
           dayType: day.dayType,
           projectName: day.projectName,
+          hrmsProjectId: "hrmsProjectId" in day ? day.hrmsProjectId : null,
           description: day.description,
           checklistItems: {
             create: day.checklistItems.map((item) => ({
               title: item.title,
               description: item.description,
               kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
+              assignedHours: "assignedHours" in item ? item.assignedHours ?? null : null,
               sortOrder: item.sortOrder,
             })),
           },

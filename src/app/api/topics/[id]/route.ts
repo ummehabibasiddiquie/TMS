@@ -10,7 +10,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const topic = await prisma.topic.update({
     where: { id: params.id },
     data: {
-      title: title?.trim(),
+      ...(title !== undefined ? { title: title?.trim() || undefined } : {}),
       contentType: contentType ?? undefined,
       contentUrl: contentUrl !== undefined ? contentUrl?.trim() || null : undefined,
       contentBody: contentBody !== undefined ? contentBody?.trim() || null : undefined,

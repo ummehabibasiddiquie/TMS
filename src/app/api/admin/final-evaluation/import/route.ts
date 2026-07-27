@@ -6,13 +6,13 @@ import { rowsToQuizQuestions } from "@/lib/quiz-import";
 import { ensureDefaultFinalEvaluationQuiz } from "@/lib/final-evaluation";
 
 /**
- * Admin: import final-evaluation questions from CSV/Excel (same format as lesson quizzes).
- * Appends by default; pass ?replace=1 to replace all existing questions.
+ * Admin or Team Lead: import final-evaluation questions from CSV/Excel
+ * (same format as lesson quizzes). Appends by default; pass ?replace=1 to replace all.
  */
 export async function POST(req: Request) {
-  const user = await requireSession(["ADMIN"]);
+  const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized — Admin only" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(req.url);

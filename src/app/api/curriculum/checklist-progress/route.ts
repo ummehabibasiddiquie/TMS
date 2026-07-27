@@ -17,6 +17,16 @@ export async function POST(req: Request) {
   const item = await prisma.curriculumChecklistItem.findUnique({ where: { id: itemId } });
   if (!item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
 
+  if (item.kind === "WORK") {
+    return NextResponse.json(
+      {
+        error:
+          "Training work is tracked from HRMS — it cannot be marked done manually",
+      },
+      { status: 400 }
+    );
+  }
+
   await prisma.userChecklistProgress.upsert({
     where: { userId_itemId: { userId: user.id, itemId } },
     create: {

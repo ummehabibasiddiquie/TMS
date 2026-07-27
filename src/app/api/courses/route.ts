@@ -43,29 +43,15 @@ export async function POST(req: Request) {
           minWatchPercent: 90,
         },
       },
-      modules: {
-        create: {
-          title: "Module 1",
-          order: 0,
-          lessons: {
-            create: {
-              title: "Introduction",
-              order: 0,
-              lessonType: "CONTENT",
-              topics: {
-                create: {
-                  title: "Getting Started",
-                  contentType: "DOCUMENT",
-                  contentBody: "Add your lesson content here.",
-                  order: 0,
-                },
-              },
-            },
-          },
+    },
+    include: {
+      modules: { include: { _count: { select: { lessons: true } } } },
+      _count: {
+        select: {
+          enrollments: { where: { user: { active: true } } },
         },
       },
     },
-    include: { modules: { include: { lessons: true } } },
   });
 
   return NextResponse.json({ course });

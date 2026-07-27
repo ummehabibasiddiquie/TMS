@@ -33,13 +33,12 @@ export async function POST(req: Request, ctx: Ctx) {
   try {
     if (action === "reset") {
       await resetTraineeCurriculumToDefault(traineeId);
-      const { scopeKey, isCustom } = await resolveCurriculumScope(traineeId);
-      const days = await listCurriculumDays(scopeKey);
+      const days = await listCurriculumDays(traineeId);
       return NextResponse.json({
         ok: true,
         action: "reset",
-        isCustom,
-        scopeKey,
+        isCustom: true,
+        scopeKey: traineeId,
         days,
         trainee: { id: gate.trainee.id, name: gate.trainee.name, email: gate.trainee.email },
       });

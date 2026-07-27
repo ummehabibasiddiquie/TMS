@@ -23,10 +23,10 @@ export async function GET() {
   }
 }
 
-/** Admin only: replace questions on the active final quiz. */
+/** Admin or Team Lead: replace questions on the active final quiz. */
 export async function PUT(req: Request) {
-  const user = await requireSession(["ADMIN"]);
-  if (!user) return NextResponse.json({ error: "Unauthorized — Admin only" }, { status: 401 });
+  const user = await requireSession(["ADMIN", "TRAINER"]);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: {
     title?: string;

@@ -1,44 +1,22 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { ProjectManager } from "@/components/projects/ProjectManager";
-import { prisma } from "@/lib/db";
+import { listHrmsProjects } from "@/lib/hrms";
+import { HrmsProjectList } from "@/components/projects/HrmsProjectList";
 
 export default async function AdminProjectsPage() {
   const user = await getSession();
   if (!user) redirect("/login");
   if (user.role !== "ADMIN" && user.role !== "TRAINER") redirect("/");
 
-  const projects = await prisma.project.findMany({
-    include: {
-      categoryRel: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      assignments: {
-        where: { user: { active: true } },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              active: true,
-            },
-          },
-        },
-      },
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  }) as any;
+  // Show all HRMS projects (active + inactive) for Admin/TL visibility
+  const result = await listHrmsProjects({ activeOnly: false });
 
-  return <ProjectManager projects={projects} user={user} />;
+  return (
+    <HrmsProjectList
+      projects={result.projects}
+      configured={result.configured}
+      connected={result.connected}
+      message={result.message}
+    />
+  );
 }
