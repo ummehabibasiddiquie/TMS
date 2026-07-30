@@ -356,6 +356,7 @@ export function FinalEvaluationExam() {
 
   async function submit() {
     if (!allAnswered || submitting) return;
+    if (!state) return;
     if (
       !confirm(
         state.retakeGranted
