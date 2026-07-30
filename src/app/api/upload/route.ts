@@ -85,19 +85,27 @@ export async function POST(req: Request) {
 
     const fileExtension = file.name.split(".").pop()?.toLowerCase() || "bin";
     const uniqueFilename = `${randomUUID()}.${fileExtension}`;
-    const uploadDir = join(process.cwd(), "public", "uploads");
+    const folderRaw = String(formData.get("folder") || "").trim();
+    const folder =
+      folderRaw === "certificates" ? "certificates" : "";
+    const uploadDir = folder
+      ? join(process.cwd(), "public", "uploads", folder)
+      : join(process.cwd(), "public", "uploads");
     await mkdir(uploadDir, { recursive: true });
     const filePath = join(uploadDir, uniqueFilename);
 
     const bytes = await file.arrayBuffer();
     await writeFile(filePath, Buffer.from(bytes));
 
-    const fileUrl = `/uploads/${uniqueFilename}`;
+    const fileUrl = folder
+      ? `/uploads/${folder}/${uniqueFilename}`
+      : `/uploads/${uniqueFilename}`;
     return NextResponse.json({
       url: fileUrl,
       filename: uniqueFilename,
       originalName: file.name,
       kind,
+      folder: folder || null,
     });
   } catch (error) {
     console.error("Upload error:", error);

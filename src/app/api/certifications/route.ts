@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { isFinalQuizCertVisibleToTrainee } from "@/lib/final-evaluation";
 
 export async function GET() {
   const user = await requireSession();
@@ -22,6 +23,9 @@ export async function GET() {
           certifications: {
             where: { userId: user.id },
             orderBy: { certifiedAt: "desc" },
+            include: {
+              reviewedBy: { select: { id: true, name: true, role: true } },
+            },
           },
         },
       },
@@ -47,8 +51,41 @@ export async function GET() {
       cycle: true,
       status: true,
       certifiedAt: true,
+      reviewedById: true,
+      reviewNote: true,
+      reviewedBy: { select: { id: true, name: true, role: true } },
     },
   });
 
-  return NextResponse.json({ projects, finalQuizCertificates });
+  const profile = await prisma.traineeProfile.findUnique({
+    where: { userId: user.id },
+    select: { evaluationCycle: true },
+  });
+  const currentCycle = profile?.evaluationCycle ?? 1;
+
+  const currentCycleCerts = finalQuizCertificates.filter(
+    (cert) => cert.cycle === currentCycle
+  );
+
+  // Only reviewer-approved certificates for the current cycle are visible to trainees.
+  const activeFinalQuizCertificates = currentCycleCerts.filter((cert) =>
+    isFinalQuizCertVisibleToTrainee(cert)
+  );
+  const pendingFinalQuizCertificate =
+    currentCycleCerts.find(
+      (cert) =>
+        !isFinalQuizCertVisibleToTrainee(cert) && cert.status === "PENDING_REVIEW"
+    ) ?? null;
+  const rejectedFinalQuizCertificate =
+    currentCycleCerts.find((cert) => cert.status === "REJECTED") ?? null;
+
+  return NextResponse.json({
+    projects,
+    finalQuizCertificates: activeFinalQuizCertificates,
+    pendingFinalQuizCertificate,
+    rejectedFinalQuizCertificate,
+    previousFinalQuizCertificates: finalQuizCertificates.filter(
+      (cert) => cert.cycle < currentCycle
+    ),
+  });
 }

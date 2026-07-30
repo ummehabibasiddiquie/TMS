@@ -1,62 +1,58 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { ACTIVE_USER } from "@/lib/active-filters";
+import { buildCertificationReviewBoard } from "@/lib/certification-history";
 import { backfillPendingCertsFromQuizAttempts } from "@/lib/project-certification";
 
-/** List certifications awaiting Admin / Team Lead approval */
+/** Certification review board + full history for Admin / Team Lead */
 export async function GET() {
   const user = await requireSession(["ADMIN", "TRAINER"]);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Ensure course-quiz passes already in the DB show up in this queue
   try {
     await backfillPendingCertsFromQuizAttempts();
   } catch (e) {
     console.error("Cert backfill failed:", e);
   }
 
-  const [pending, approvedCount, rejectedCount] = await Promise.all([
-    prisma.projectCertification.findMany({
-      where: {
-        status: "PENDING_REVIEW",
-        passed: true,
-        user: ACTIVE_USER,
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true, employeeId: true } },
-        project: {
-          select: {
-            id: true,
-            name: true,
-            categoryRel: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: { certifiedAt: "desc" },
-    }),
-    prisma.projectCertification.count({
-      where: { status: "APPROVED", user: ACTIVE_USER },
-    }),
-    prisma.projectCertification.count({
-      where: { status: "REJECTED", user: ACTIVE_USER },
-    }),
-  ]);
+  const board = await buildCertificationReviewBoard(user.role, user.id);
+
+  const certifications = board.certifications.map((e) => ({
+    id: e.certId!,
+    kind: e.kind as "project" | "final_quiz",
+    score: e.score ?? 0,
+    status:
+      e.event === "rejected"
+        ? "REJECTED"
+        : e.event === "approved"
+          ? "APPROVED"
+          : "PENDING_REVIEW",
+    submittedAt: e.at,
+    cycle: e.cycle,
+    quizTitle: e.kind === "final_quiz" ? e.title : undefined,
+    canAllowRetake: e.canAllowRetake,
+    reviewNote: e.reviewNote,
+    user: e.trainee,
+    project:
+      e.kind === "project"
+        ? { id: e.certId!, name: e.title, categoryRel: e.subtitle ? { name: e.subtitle } : null }
+        : undefined,
+  }));
+
+  const retakeAwaiting = board.retakeAwaiting.map((e) => ({
+    traineeId: e.trainee.id,
+    traineeName: e.trainee.name,
+    traineeEmail: e.trainee.email,
+    employeeId: e.trainee.employeeId,
+    previousScore: e.score,
+    evaluationCycle: e.cycle ?? 1,
+    grantedAt: e.at,
+    grantedBy: e.actor,
+  }));
 
   return NextResponse.json({
-    stats: {
-      pending: pending.length,
-      approved: approvedCount,
-      rejected: rejectedCount,
-    },
-    certifications: pending.map((c) => ({
-      id: c.id,
-      score: c.score,
-      passed: c.passed,
-      status: c.status,
-      submittedAt: c.certifiedAt,
-      user: c.user,
-      project: c.project,
-    })),
+    stats: board.stats,
+    certifications,
+    retakeAwaiting,
+    history: board.history,
   });
 }

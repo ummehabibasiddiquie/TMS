@@ -17,7 +17,9 @@ import {
   Briefcase,
   Layers,
   CalendarPlus,
+  Loader2,
 } from "lucide-react";
+import { SectionLoader, WorkingBanner } from "@/components/ui/SectionLoader";
 
 type ChecklistItem = {
   id: string;
@@ -77,6 +79,7 @@ export function CurriculumManager() {
   const [traineeLabel, setTraineeLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
   const [msg, setMsg] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -307,25 +310,31 @@ export function CurriculumManager() {
   async function enableCustom() {
     if (!traineeId) return;
     setBusy(true);
+    setBusyLabel("Creating personal schedule…");
     setMsg("");
-    const res = await fetch(`/api/curriculum/trainee/${traineeId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "enable" }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setMsg(data.error || "Could not create personal schedule");
-      return;
+    try {
+      const res = await fetch(`/api/curriculum/trainee/${traineeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enable" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Could not create personal schedule");
+        return;
+      }
+      setBusyLabel("Refreshing schedule…");
+      await load();
+      await loadTrainees();
+      setMsg(
+        data.created
+          ? "Personal schedule created from the default. Edits only affect this trainee."
+          : "This trainee already has a personal schedule."
+      );
+    } finally {
+      setBusy(false);
+      setBusyLabel("");
     }
-    setMsg(
-      data.created
-        ? "Personal schedule created from the default. Edits only affect this trainee."
-        : "This trainee already has a personal schedule."
-    );
-    await load();
-    await loadTrainees();
   }
 
   async function resetToDefault() {
@@ -338,52 +347,76 @@ export function CurriculumManager() {
       return;
     }
     setBusy(true);
-    const res = await fetch(`/api/curriculum/trainee/${traineeId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reset" }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setMsg(data.error || "Reset failed");
-      return;
+    setBusyLabel("Resetting schedule to default…");
+    setMsg("");
+    try {
+      const res = await fetch(`/api/curriculum/trainee/${traineeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Reset failed");
+        return;
+      }
+      setBusyLabel("Refreshing schedule…");
+      setEditing(false);
+      await load();
+      await loadTrainees();
+      setMsg("Schedule reset to a fresh copy of the default. You can customize it again for this trainee.");
+    } finally {
+      setBusy(false);
+      setBusyLabel("");
     }
-    setMsg("Schedule reset to a fresh copy of the default. You can customize it again for this trainee.");
-    setEditing(false);
-    await load();
-    await loadTrainees();
   }
 
   async function extendWeek() {
     if (!traineeId) return;
+    const raw = prompt(
+      "How many extra days to add?\nCopied from Extra week default (cycles if more than the template). Enter 1–60 (7 = one week, 14 = two weeks).",
+      "7"
+    );
+    if (raw == null) return;
+    const days = Number(raw.trim());
+    if (!Number.isFinite(days) || days < 1 || days > 60) {
+      setMsg("Enter a number of days between 1 and 60");
+      return;
+    }
     if (
       !confirm(
-        "Add the default extra-week schedule for this trainee? Days (checklist, courses, work) are copied from Extra week default — you can edit this trainee’s copy afterward."
+        `Add ${days} day${days === 1 ? "" : "s"} from Extra week default? You can edit this trainee’s copy afterward.`
       )
     ) {
       return;
     }
     setBusy(true);
-    const res = await fetch(`/api/curriculum/trainee/${traineeId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "extendWeek", days: 7 }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setMsg(data.error || "Could not add week");
-      return;
+    setBusyLabel(`Adding ${days} day${days === 1 ? "" : "s"}…`);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/curriculum/trainee/${traineeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "extendWeek", days }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Could not add days");
+        return;
+      }
+      setBusyLabel("Refreshing schedule…");
+      setEditing(false);
+      await load();
+      await loadTrainees();
+      setMsg(
+        data.fromTemplate
+          ? `Copied Extra week default as Days ${data.fromDay}–${data.toDay} (${data.added} day${data.added === 1 ? "" : "s"}). Edit this trainee’s copy as needed.`
+          : `Added Days ${data.fromDay}–${data.toDay}. Select a new day to add content.`
+      );
+    } finally {
+      setBusy(false);
+      setBusyLabel("");
     }
-    setMsg(
-      data.fromTemplate
-        ? `Copied Extra week default as Days ${data.fromDay}–${data.toDay}. Edit this trainee’s copy as needed.`
-        : `Added Days ${data.fromDay}–${data.toDay}. Select a new day to add content.`
-    );
-    setEditing(false);
-    await load();
-    await loadTrainees();
   }
 
   async function addChecklistItem(kind: "CHECKLIST" | "WORK" = "CHECKLIST") {
@@ -483,7 +516,7 @@ export function CurriculumManager() {
   }
 
   if (loading && days.length === 0) {
-    return <p className="text-slate-400">Loading curriculum…</p>;
+    return <SectionLoader message="Loading curriculum…" />;
   }
 
   return (
@@ -501,13 +534,16 @@ export function CurriculumManager() {
           <button
             type="button"
             onClick={startCreate}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
             Add day
           </button>
         )}
       </div>
+
+      {busyLabel && <WorkingBanner message={busyLabel} />}
 
       <div className="flex flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900/50 p-4 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1">
@@ -536,7 +572,7 @@ export function CurriculumManager() {
         </div>
         {isExtraWeekDefault ? (
           <p className="max-w-md text-xs text-amber-200/90 sm:pb-2">
-            When Admin adds +1 week, these days are copied to that trainee. Leads can edit the
+            When Admin adds extra days, these days are copied to that trainee (cycled if they add more than this template). Leads can edit the
             trainee’s copy afterward without changing this template.
           </p>
         ) : null}
@@ -570,12 +606,16 @@ export function CurriculumManager() {
                 onClick={extendWeek}
                 className="inline-flex items-center gap-2 rounded-xl border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
               >
-                <CalendarPlus className="h-4 w-4" />
-                +1 week (from Extra week default)
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CalendarPlus className="h-4 w-4" />
+                )}
+                {busy ? "Working…" : "Add days (from Extra week default)"}
               </button>
             ) : traineeId ? (
               <p className="text-xs text-slate-500 self-center">
-                Extra week only when progress is under 90%
+                Extra days only when progress is under 90%
                 {traineePercent != null ? ` (now ${traineePercent}%)` : ""}.
               </p>
             ) : null}
@@ -585,7 +625,7 @@ export function CurriculumManager() {
 
       {isExtraWeekDefault && (
         <p className="rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-          Editing Extra week default — shared template for all +1 week extensions.
+          Editing Extra week default — shared template when you add extra days (cycled if you add more than this template).
         </p>
       )}
 
@@ -603,7 +643,7 @@ export function CurriculumManager() {
         </p>
       )}
 
-      {msg && (
+      {msg && !busyLabel && (
         <p className="rounded-xl bg-blue-500/10 px-4 py-2 text-sm text-blue-200">{msg}</p>
       )}
 
@@ -963,11 +1003,11 @@ export function CurriculumManager() {
 
                     {/* Training work */}
                     <div>
-                      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-300">
-                        <Briefcase className="h-4 w-4 text-amber-400" />
+                      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-300">
+                        <Briefcase className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         Training work
                       </h3>
-                      <p className="mb-3 text-xs text-slate-500">
+                      <p className="mb-3 text-xs text-slate-600 dark:text-slate-500">
                         Pick the HRMS project and assigned hours. Trainees do not tick this off —
                         progress is calculated from HRMS tracker, and incomplete work does not block
                         the next day.
@@ -976,24 +1016,29 @@ export function CurriculumManager() {
                         {workOnly.map((item) => (
                           <li
                             key={item.id}
-                            className="flex items-start justify-between gap-3 rounded-xl border border-amber-900/40 bg-amber-950/20 px-3 py-2"
+                            className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20"
                           >
-                            <div>
-                              <p className="font-medium">{item.title}</p>
+                            <div className="min-w-0">
+                              <p className="font-medium text-slate-900 dark:text-slate-100">
+                                {item.title}
+                              </p>
                               {item.assignedHours != null && (
-                                <p className="text-xs text-amber-200/90">
+                                <p className="text-xs font-medium text-amber-900 dark:text-amber-200/90">
                                   Assigned hours: {item.assignedHours}
                                 </p>
                               )}
                               {item.description && (
-                                <p className="text-xs text-slate-500">{item.description}</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-500">
+                                  {item.description}
+                                </p>
                               )}
                             </div>
                             {canEdit && (
                               <button
                                 type="button"
                                 onClick={() => deleteChecklistItem(item.id)}
-                                className="text-slate-500 hover:text-red-400"
+                                className="shrink-0 text-slate-500 hover:text-red-600 dark:hover:text-red-400"
+                                aria-label={`Remove ${item.title}`}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>

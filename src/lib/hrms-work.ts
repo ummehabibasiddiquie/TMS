@@ -321,34 +321,69 @@ export async function listHrmsWorkForTraineeProjects(
 /** Collect practice projects from a trainee’s curriculum days (scope resolved by caller). */
 export function collectPracticeProjectsFromDays(
   days: {
+    dayNumber?: number;
     hrmsProjectId?: string | null;
     projectName?: string | null;
-    checklistItems?: { kind?: string | null }[];
-  }[]
-): { id: string; name: string }[] {
-  const map = new Map<string, string>();
+    checklistItems?: { kind?: string | null; title?: string | null }[];
+  }[],
+  options?: { throughDayNumber?: number }
+): { id: string; name: string; dayNumber?: number }[] {
+  const through = options?.throughDayNumber;
+  const map = new Map<string, { name: string; dayNumber?: number }>();
   for (const day of days) {
+    if (
+      through != null &&
+      day.dayNumber != null &&
+      Number.isFinite(day.dayNumber) &&
+      day.dayNumber > through
+    ) {
+      continue;
+    }
     const id = day.hrmsProjectId?.trim();
     if (id) {
-      map.set(id, day.projectName?.trim() || `Project ${id}`);
+      const existing = map.get(id);
+      const dayNumber = day.dayNumber;
+      map.set(id, {
+        name: day.projectName?.trim() || existing?.name || `Project ${id}`,
+        dayNumber:
+          existing?.dayNumber != null && dayNumber != null
+            ? Math.min(existing.dayNumber, dayNumber)
+            : dayNumber ?? existing?.dayNumber,
+      });
       continue;
     }
     // Legacy: name only — skip HRMS id metrics (cannot join reliably)
   }
-  return [...map.entries()].map(([id, name]) => ({ id, name }));
+  return [...map.entries()].map(([id, v]) => ({
+    id,
+    name: v.name,
+    dayNumber: v.dayNumber,
+  }));
 }
 
 export function hasPracticeWorkOnSchedule(
   days: {
+    dayNumber?: number;
     hrmsProjectId?: string | null;
     projectName?: string | null;
     checklistItems?: { kind?: string | null }[];
-  }[]
+  }[],
+  options?: { throughDayNumber?: number }
 ): boolean {
-  return days.some(
-    (d) =>
+  const through = options?.throughDayNumber;
+  return days.some((d) => {
+    if (
+      through != null &&
+      d.dayNumber != null &&
+      Number.isFinite(d.dayNumber) &&
+      d.dayNumber > through
+    ) {
+      return false;
+    }
+    return (
       Boolean(d.hrmsProjectId?.trim()) ||
       Boolean(d.projectName?.trim()) ||
       (d.checklistItems || []).some((i) => i.kind === "WORK")
-  );
+    );
+  });
 }

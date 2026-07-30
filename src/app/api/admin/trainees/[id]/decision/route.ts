@@ -2,27 +2,27 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { extendTraineeCurriculumByWeek } from "@/lib/day-wise-training";
-import { getTraineeEvaluationScore } from "@/lib/final-evaluation";
+import {
+  allowFinalQuizRetake,
+  approveFinalQuizCertificateForTrainee,
+  getTraineeEvaluationScore,
+  rejectFinalQuizCertificateForTrainee,
+} from "@/lib/final-evaluation";
 
 /**
- * Admin-only: reject, approve into org (≥90% final quiz), or add +1 week.
- * Team Lead cannot call this route.
+ * Admin: reject, approve into org, add extra days, allow retake, approve certificate.
+ * Team Lead: allow retake only (for assigned trainees).
  */
 export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const admin = await requireSession(["ADMIN"]);
-  if (!admin) {
-    return NextResponse.json({ error: "Unauthorized — Admin only" }, { status: 401 });
-  }
-
   const traineeId = params.id;
   if (!traineeId) {
     return NextResponse.json({ error: "Trainee id required" }, { status: 400 });
   }
 
-  let body: { action?: string };
+  let body: { action?: string; days?: number };
   try {
     body = await req.json();
   } catch {
@@ -30,11 +30,24 @@ export async function POST(
   }
 
   const action = body.action;
-  if (!action || !["reject", "approve", "extendWeek"].includes(action)) {
+  if (
+    !action ||
+    !["reject", "approve", "extendWeek", "allowRetake", "approveCertificate"].includes(
+      action
+    )
+  ) {
     return NextResponse.json(
-      { error: "action must be reject | approve | extendWeek" },
+      {
+        error:
+          "action must be reject | approve | extendWeek | allowRetake | approveCertificate",
+      },
       { status: 400 }
     );
+  }
+
+  const actor = await requireSession(["ADMIN", "TRAINER"]);
+  if (!actor) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const trainee = await prisma.user.findUnique({
@@ -45,7 +58,7 @@ export async function POST(
       email: true,
       role: true,
       active: true,
-      traineeProfile: true,
+      traineeProfile: { select: { trainerId: true } },
     },
   });
 
@@ -53,9 +66,36 @@ export async function POST(
     return NextResponse.json({ error: "Trainee not found" }, { status: 404 });
   }
 
+  if (action === "allowRetake") {
+    if (
+      actor.role === "TRAINER" &&
+      trainee.traineeProfile?.trainerId !== actor.id
+    ) {
+      return NextResponse.json({ error: "Not your trainee" }, { status: 403 });
+    }
+    try {
+      const result = await allowFinalQuizRetake(traineeId, actor.id);
+      return NextResponse.json({
+        ok: true,
+        action: "allowRetake",
+        traineeId,
+        ...result,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not allow quiz retake";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
+  if (actor.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized — Admin only" }, { status: 401 });
+  }
+
   const evaluation = await getTraineeEvaluationScore(traineeId);
 
   if (action === "reject") {
+    await rejectFinalQuizCertificateForTrainee(traineeId, actor.id).catch(() => null);
     await prisma.$transaction([
       prisma.user.update({
         where: { id: traineeId },
@@ -93,11 +133,13 @@ export async function POST(
     if (evaluation.score < 90) {
       return NextResponse.json(
         {
-          error: `Approval requires ≥90% on the final quiz (current: ${evaluation.score}%). Use +1 week or reject for lower scores.`,
+          error: `Approval requires ≥90% on the final quiz (current: ${evaluation.score}%). Add extra days or reject for lower scores.`,
         },
         { status: 400 }
       );
     }
+
+    await approveFinalQuizCertificateForTrainee(traineeId, actor.id);
 
     await prisma.traineeProfile.upsert({
       where: { userId: traineeId },
@@ -130,9 +172,27 @@ export async function POST(
     });
   }
 
-  // extendWeek
+  if (action === "approveCertificate") {
+    try {
+      const cert = await approveFinalQuizCertificateForTrainee(traineeId, actor.id);
+      return NextResponse.json({
+        ok: true,
+        action: "approveCertificate",
+        traineeId,
+        certificateId: cert.id,
+        status: cert.status,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not approve certificate";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
   try {
-    const result = await extendTraineeCurriculumByWeek(traineeId, 7);
+    const rawDays = Number(body.days);
+    const extraDays = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 7;
+    const result = await extendTraineeCurriculumByWeek(traineeId, extraDays);
     return NextResponse.json({
       ok: true,
       action: "extendWeek",
@@ -140,7 +200,7 @@ export async function POST(
       ...result,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not extend week";
+    const message = err instanceof Error ? err.message : "Could not add extra days";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

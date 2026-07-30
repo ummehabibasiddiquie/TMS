@@ -1,4 +1,15 @@
 import { prisma } from "./db";
+import { format } from "date-fns";
+import {
+  computeDayDueInfo,
+  resolveTrainingStartDate,
+  summarizeDue,
+  type DayDueInfo,
+  type DueSummary,
+} from "./day-due";
+
+export type { DayDueInfo, DueSummary } from "./day-due";
+export { dueBadgeClass } from "./day-due";
 
 export const GLOBAL_CURRICULUM_SCOPE = "GLOBAL";
 /** Default template copied onto a trainee when Admin/TL adds an extra week. */
@@ -47,6 +58,9 @@ export type DaySnapshot = {
   totalCount: number;
   percent: number;
   done: boolean;
+  /** When checklist+lessons were all completed (max item completedAt). */
+  completedAt: string | null;
+  due: DayDueInfo;
   /** Optional Team Lead feedback for this day */
   review: {
     notes: string | null;
@@ -61,9 +75,16 @@ export type DayWisePlan = {
   scopeKey: string;
   isCustom: boolean;
   currentDay: number;
+  /** Day from checklist/course completion only (before Admin promotion). */
+  autoDay?: number;
+  /** Admin/TL forced day when ahead of auto progress. */
+  forcedDay?: number | null;
   totalDays: number;
   /** Length of GLOBAL default schedule (planned training, before any extra weeks). */
   plannedDays: number;
+  /** Training calendar start = dateOfJoining (fallback account createdAt). */
+  trainingStart: string | null;
+  dueSummary: DueSummary;
   today: DaySnapshot | null;
   yesterday: DaySnapshot | null;
   /** Full snapshots for all days before current (newest first). */
@@ -73,9 +94,13 @@ export type DayWisePlan = {
     title: string;
     dayType: string;
     projectName: string | null;
+    hrmsProjectId: string | null;
     done: boolean;
     percent: number;
     isExtra?: boolean;
+    completedAt: string | null;
+    due: DayDueInfo;
+    workItems?: DayChecklistItem[];
   }[];
   overallPercent: number;
   /** True when Admin has approved trainee into the org. */
@@ -121,7 +146,7 @@ async function buildDaySnapshot(
       sortOrder: number;
       kind?: string;
       assignedHours?: number | null;
-      progress: { completed: boolean }[];
+      progress: { completed: boolean; completedAt: Date | null }[];
     }[];
     lessons: {
       id: string;
@@ -131,10 +156,15 @@ async function buildDaySnapshot(
         id: string;
         title: string;
         module: { title: string; course: { id: string; title: string } };
-        progress: { completed: boolean; watchPercent: number }[];
+        progress: {
+          completed: boolean;
+          watchPercent: number;
+          completedAt: Date | null;
+        }[];
       };
     }[];
-  }
+  },
+  trainingStart: Date | null
 ): Promise<DaySnapshot> {
   const allTicks: DayChecklistItem[] = day.checklistItems
     .slice()
@@ -191,6 +221,33 @@ async function buildDaySnapshot(
     dayType = "CHECKLIST";
   }
 
+  const done = totalCount === 0 || completedCount === totalCount;
+
+  // Day completedAt = latest gate-item completion time when the day is done
+  let completedAtDate: Date | null = null;
+  if (done && totalCount > 0) {
+    const times: Date[] = [];
+    for (const item of day.checklistItems) {
+      if (item.kind === "WORK") continue;
+      const p = item.progress[0];
+      if (p?.completed && p.completedAt) times.push(new Date(p.completedAt));
+    }
+    for (const link of day.lessons) {
+      const p = link.lesson.progress[0];
+      if (p?.completed && p.completedAt) times.push(new Date(p.completedAt));
+    }
+    if (times.length > 0) {
+      completedAtDate = new Date(Math.max(...times.map((t) => t.getTime())));
+    }
+  }
+
+  const due = computeDayDueInfo({
+    dayNumber: day.dayNumber,
+    done,
+    completedAt: completedAtDate,
+    trainingStart,
+  });
+
   return {
     dayNumber: day.dayNumber,
     title: day.title,
@@ -206,7 +263,9 @@ async function buildDaySnapshot(
     // Work-only days have no gate items — show 100% so UI doesn’t look “stuck”
     percent: totalCount === 0 ? 100 : toPercent(completedCount, totalCount),
     // Empty gate (work-only / empty day) does not block — next day still opens
-    done: totalCount === 0 || completedCount === totalCount,
+    done,
+    completedAt: completedAtDate ? completedAtDate.toISOString() : null,
+    due,
     review: null,
   };
 }
@@ -259,10 +318,20 @@ export async function listCurriculumDays(scopeKey: string) {
  * Day-wise plan from GLOBAL default, or trainee-specific copy if customized.
  */
 export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
-  const [{ scopeKey, isCustom }, profile] = await Promise.all([
+  const [{ scopeKey, isCustom }, profile, user] = await Promise.all([
     resolveCurriculumScope(userId),
     prisma.traineeProfile.findUnique({ where: { userId } }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { dateOfJoining: true, createdAt: true },
+    }),
   ]);
+
+  const trainingStart = resolveTrainingStartDate(
+    user?.dateOfJoining,
+    user?.createdAt
+  );
+  const emptyDue = summarizeDue([], trainingStart);
 
   const days = await prisma.curriculumDay.findMany({
     where: { scopeKey },
@@ -278,6 +347,8 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
       currentDay: 1,
       totalDays: 0,
       plannedDays: 0,
+      trainingStart: trainingStart ? format(trainingStart, "yyyy-MM-dd") : null,
+      dueSummary: emptyDue,
       today: null,
       yesterday: null,
       pastDays: [],
@@ -293,7 +364,9 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
     where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
   });
 
-  const snapshots = await Promise.all(days.map((d) => buildDaySnapshot(userId, d)));
+  const snapshots = await Promise.all(
+    days.map((d) => buildDaySnapshot(userId, d, trainingStart))
+  );
 
   const reviews = await prisma.dayWorkReview.findMany({
     where: { traineeId: userId },
@@ -314,18 +387,26 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
 
   const byNumber = new Map(snapshots.map((s) => [s.dayNumber, s]));
 
-  let currentDay = Math.max(profile?.currentDayNumber || 1, days[0].dayNumber);
+  let autoDay = Math.max(profile?.currentDayNumber || 1, days[0].dayNumber);
   for (const s of snapshots) {
     if (!s.done) {
-      currentDay = s.dayNumber;
+      autoDay = s.dayNumber;
       break;
     }
-    currentDay = s.dayNumber;
+    autoDay = s.dayNumber;
   }
 
-  const overallDone = snapshots.reduce((a, s) => a + s.completedCount, 0);
-  const overallTotal = snapshots.reduce((a, s) => a + s.totalCount, 0);
-  const overallPercent = toPercent(overallDone, overallTotal);
+  const maxDay = days[days.length - 1]?.dayNumber ?? autoDay;
+  const forced = profile?.forcedCurrentDayNumber;
+  // Admin/TL promotion: open at least the forced day even if earlier checklist is incomplete
+  let currentDay = autoDay;
+  if (forced != null && Number.isFinite(forced) && forced > 0) {
+    currentDay = Math.min(maxDay, Math.max(autoDay, forced));
+  }
+
+  const completedDays = snapshots.filter((s) => s.done).length;
+  const totalDays = snapshots.length;
+  const overallPercent = toPercent(completedDays, totalDays);
   const scheduleComplete = snapshots.length > 0 && snapshots.every((s) => s.done);
 
   // Terminal Admin decisions are preserved; otherwise derive from schedule.
@@ -356,11 +437,16 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
   }
 
   if (profile && !decided) {
+    const clearForced =
+      forced != null && autoDay >= forced
+        ? { forcedCurrentDayNumber: null as number | null }
+        : {};
     const needsUpdate =
       currentDay !== profile.currentDayNumber ||
       !profile.trainingStarted ||
       profile.trainingStatus !== trainingStatus ||
-      profile.readyForProduction !== readyForProduction;
+      profile.readyForProduction !== readyForProduction ||
+      (forced != null && autoDay >= forced);
     if (needsUpdate) {
       await prisma.traineeProfile.update({
         where: { userId },
@@ -369,6 +455,7 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
           trainingStarted: true,
           trainingStatus,
           readyForProduction,
+          ...clearForced,
         },
       });
     }
@@ -390,8 +477,15 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
     scopeKey,
     isCustom,
     currentDay,
+    autoDay,
+    forcedDay: forced != null && forced > autoDay ? forced : null,
     totalDays: days.length,
     plannedDays,
+    trainingStart: trainingStart ? format(trainingStart, "yyyy-MM-dd") : null,
+    dueSummary: summarizeDue(
+      snapshots.map((s) => s.due),
+      trainingStart
+    ),
     today,
     yesterday,
     pastDays,
@@ -400,17 +494,58 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
       title: s.title,
       dayType: s.dayType,
       projectName: s.projectName,
+      hrmsProjectId: s.hrmsProjectId,
       done: s.done,
       percent: s.percent,
       isExtra:
         s.dayNumber > plannedDays ||
         /extra training/i.test(s.title),
+      completedAt: s.completedAt,
+      due: s.due,
+      workItems: s.workItems,
     })),
     overallPercent,
     readyForProduction,
     scheduleComplete,
     trainingStatus,
   };
+}
+
+/** Admin/TL: set the trainee's open day (promote even if earlier checklist incomplete). */
+export async function setTraineeCurrentDay(traineeId: string, dayNumber: number) {
+  const day = Math.floor(Number(dayNumber));
+  if (!Number.isFinite(day) || day < 1) {
+    throw new Error("dayNumber must be a positive integer");
+  }
+
+  const { scopeKey } = await resolveCurriculumScope(traineeId);
+  const days = await listCurriculumDays(scopeKey);
+  if (days.length === 0) {
+    throw new Error("No schedule found for this trainee");
+  }
+  const maxDay = Math.max(...days.map((d) => d.dayNumber));
+  const target = Math.min(day, maxDay);
+  if (!days.some((d) => d.dayNumber === target)) {
+    throw new Error(`Day ${target} does not exist on this schedule`);
+  }
+
+  await prisma.traineeProfile.upsert({
+    where: { userId: traineeId },
+    create: {
+      userId: traineeId,
+      currentDayNumber: target,
+      forcedCurrentDayNumber: target,
+      trainingStarted: true,
+      trainingStatus: "IN_TRAINING",
+    },
+    update: {
+      currentDayNumber: target,
+      forcedCurrentDayNumber: target,
+      trainingStarted: true,
+    },
+  });
+
+  return getDayWisePlan(traineeId);
 }
 
 /** Clone GLOBAL schedule into a personal copy for this trainee (idempotent if already custom). */
@@ -515,6 +650,9 @@ export async function backfillDefaultCurriculumForTrainees() {
   return { assigned, skipped };
 }
 
+/** Max days Admin/TL can append in one extend action. */
+export const MAX_EXTEND_DAYS = 60;
+
 /** Append extra training days from the EXTRA_WEEK default template (personal schedule only). */
 export async function extendTraineeCurriculumByWeek(
   traineeId: string,
@@ -531,7 +669,7 @@ export async function extendTraineeCurriculumByWeek(
   });
 
   if (profile?.readyForProduction || profile?.trainingStatus === "APPROVED_IN_ORG") {
-    throw new Error("Cannot add an extra week for a trainee already approved into the org.");
+    throw new Error("Cannot add extra days for a trainee already approved into the org.");
   }
   if (profile?.trainingStatus === "REJECTED") {
     throw new Error("Cannot extend training for a rejected trainee.");
@@ -542,9 +680,14 @@ export async function extendTraineeCurriculumByWeek(
   const evaluation = await getTraineeEvaluationScore(traineeId);
   if (evaluation.score != null && evaluation.score >= 90) {
     throw new Error(
-      "Extra week is only for trainees under 90% on the final evaluation. This trainee scored 90% or higher."
+      "Extra days are only for trainees under 90% on the final evaluation. This trainee scored 90% or higher."
     );
   }
+
+  const daysToAdd = Math.min(
+    MAX_EXTEND_DAYS,
+    Math.max(1, Math.floor(Number(extraDays) || 7))
+  );
 
   await ensureExtraWeekDefaultCurriculum();
   await enableCustomCurriculumForTrainee(traineeId);
@@ -566,32 +709,65 @@ export async function extendTraineeCurriculumByWeek(
     },
   });
 
-  const daysToAdd = Math.max(1, extraDays);
+  type SourceDay = {
+    title: string;
+    dayType: string;
+    projectName: string | null;
+    hrmsProjectId: string | null;
+    description: string | null;
+    checklistItems: {
+      title: string;
+      description: string | null;
+      kind: string;
+      sortOrder: number;
+      assignedHours?: number | null;
+    }[];
+    lessons: {
+      lessonId: string;
+      label: string | null;
+      sortOrder: number;
+    }[];
+  };
 
-  // Prefer the full EXTRA_WEEK template; fall back to empty placeholders.
-  const source =
-    templateDays.length > 0
-      ? templateDays
-      : Array.from({ length: daysToAdd }, (_, i) => ({
-          dayNumber: i + 1,
-          title: `Day ${i + 1} — Extra training`,
-          dayType: "MIXED",
-          projectName: null as string | null,
-          hrmsProjectId: null as string | null,
-          description:
-            "Extra week day (no default template content yet). Add checklist, courses, and work as needed.",
-          checklistItems: [] as {
-            title: string;
-            description: string | null;
-            kind: string;
-            sortOrder: number;
-          }[],
-          lessons: [] as {
-            lessonId: string;
-            label: string | null;
-            sortOrder: number;
-          }[],
-        }));
+  // Build exactly daysToAdd days — cycle Extra-week default when it has content.
+  const source: SourceDay[] = Array.from({ length: daysToAdd }, (_, i) => {
+    if (templateDays.length > 0) {
+      const day = templateDays[i % templateDays.length];
+      const weekPass = Math.floor(i / templateDays.length);
+      return {
+        title:
+          weekPass > 0
+            ? `${day.title} (${weekPass + 1})`
+            : day.title,
+        dayType: day.dayType,
+        projectName: day.projectName,
+        hrmsProjectId: day.hrmsProjectId,
+        description: day.description,
+        checklistItems: day.checklistItems.map((item) => ({
+          title: item.title,
+          description: item.description,
+          kind: item.kind,
+          sortOrder: item.sortOrder,
+          assignedHours: item.assignedHours ?? null,
+        })),
+        lessons: day.lessons.map((link) => ({
+          lessonId: link.lessonId,
+          label: link.label,
+          sortOrder: link.sortOrder,
+        })),
+      };
+    }
+    return {
+      title: `Day ${maxDay + i + 1} — Extra training`,
+      dayType: "MIXED",
+      projectName: null,
+      hrmsProjectId: null,
+      description:
+        "Extra training day (no default template content yet). Add checklist, courses, and work as needed.",
+      checklistItems: [],
+      lessons: [],
+    };
+  });
 
   await prisma.$transaction(
     source.map((day, i) => {
@@ -603,14 +779,14 @@ export async function extendTraineeCurriculumByWeek(
           title: day.title,
           dayType: day.dayType,
           projectName: day.projectName,
-          hrmsProjectId: "hrmsProjectId" in day ? day.hrmsProjectId : null,
+          hrmsProjectId: day.hrmsProjectId,
           description: day.description,
           checklistItems: {
             create: day.checklistItems.map((item) => ({
               title: item.title,
               description: item.description,
               kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
-              assignedHours: "assignedHours" in item ? item.assignedHours ?? null : null,
+              assignedHours: item.assignedHours ?? null,
               sortOrder: item.sortOrder,
             })),
           },

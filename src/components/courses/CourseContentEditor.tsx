@@ -913,16 +913,18 @@ function QuizQuestionsEditor({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-purple-500/30 bg-slate-900/50 p-4">
-      <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-400">
-        <p className="font-semibold text-slate-200">{QUIZ_IMPORT_FORMAT_GUIDE.title}</p>
-        <p className="mt-2 text-slate-300">
+    <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50/90 p-4 dark:border-purple-500/30 dark:bg-slate-900/50">
+      <div className="rounded-lg border border-purple-100 bg-white p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-400">
+        <p className="font-semibold text-slate-900 dark:text-slate-200">
+          {QUIZ_IMPORT_FORMAT_GUIDE.title}
+        </p>
+        <p className="mt-2 text-slate-700 dark:text-slate-300">
           Required columns:{" "}
-          <code className="rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-purple-200">
+          <code className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[11px] font-medium text-purple-900 dark:border-transparent dark:bg-slate-800 dark:text-purple-200">
             {QUIZ_IMPORT_FORMAT_GUIDE.requiredColumns.join(", ")}
           </code>
         </p>
-        <ul className="mt-2 list-inside list-disc space-y-1">
+        <ul className="mt-2 list-inside list-disc space-y-1 text-slate-600 dark:text-slate-400">
           {QUIZ_IMPORT_FORMAT_GUIDE.rules.map((rule) => (
             <li key={rule}>{rule}</li>
           ))}
@@ -933,7 +935,7 @@ function QuizQuestionsEditor({
         <button
           type="button"
           onClick={() => downloadTemplate("csv")}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:shadow-none dark:hover:bg-slate-800"
         >
           <Download className="h-3.5 w-3.5" />
           Download CSV template
@@ -941,7 +943,7 @@ function QuizQuestionsEditor({
         <button
           type="button"
           onClick={() => downloadTemplate("xlsx")}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:shadow-none dark:hover:bg-slate-800"
         >
           <Download className="h-3.5 w-3.5" />
           Download Excel template
@@ -950,7 +952,7 @@ function QuizQuestionsEditor({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={importing || loading}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600/80 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-600 disabled:opacity-50 dark:shadow-none"
         >
           <Upload className="h-3.5 w-3.5" />
           {importing ? "Importing..." : "Upload Excel / CSV"}

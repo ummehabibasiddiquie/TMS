@@ -18,12 +18,28 @@ import {
   Star,
 } from "lucide-react";
 import type { DaySnapshot, DayWisePlan, DayChecklistItem } from "@/lib/day-wise-training";
+import { dueBadgeClass } from "@/lib/day-due";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/format-date";
 import { TrackerProgressPanel } from "@/components/tracker/TrackerProgressPanel";
 import { FinalExamGateCard } from "@/components/trainee/FinalEvaluationExam";
+import { ProgressBandBadge } from "@/components/learning/ProgressBandBadge";
+import { dueToneClass, formatFinishedLateLabel } from "@/lib/progress-band";
 
 type Props = {
   plan: DayWisePlan;
 };
+
+const statCard =
+  "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/40 dark:shadow-none";
+
+const panelCard =
+  "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none";
+
+const itemRow =
+  "rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40";
+
+const sectionLabel =
+  "text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400";
 
 function LeadReviewCard({
   day,
@@ -39,11 +55,11 @@ function LeadReviewCard({
     <div
       className={
         compact
-          ? "rounded-xl border border-blue-800/40 bg-blue-950/25 p-3"
-          : "mt-5 rounded-xl border border-blue-800/50 bg-blue-950/30 p-4"
+          ? "rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/25"
+          : "mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-950/30"
       }
     >
-      <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-blue-200">
+      <h3 className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-200">
         <MessageSquare className="h-4 w-4 shrink-0" />
         {compact ? (
           <>
@@ -53,7 +69,7 @@ function LeadReviewCard({
           <>Feedback from your Team Lead</>
         )}
         {review.reviewerName ? (
-          <span className="font-normal text-slate-400">· {review.reviewerName}</span>
+          <span className="font-normal text-slate-600 dark:text-slate-400">· {review.reviewerName}</span>
         ) : null}
       </h3>
       {review.rating != null && (
@@ -63,18 +79,26 @@ function LeadReviewCard({
         </p>
       )}
       {review.notes && (
-        <p className="whitespace-pre-wrap text-sm text-slate-200">{review.notes}</p>
+        <p className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{review.notes}</p>
       )}
     </div>
   );
 }
 
 function ProgressBar({ percent }: { percent: number }) {
+  const p = Math.max(0, Math.min(100, percent));
+  const getColor = () => {
+    if (p < 20) return "bg-red-500";
+    if (p < 40) return "bg-orange-500";
+    if (p < 65) return "bg-amber-400";
+    if (p < 85) return "bg-lime-500";
+    return "bg-emerald-500";
+  };
   return (
-    <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+    <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
       <div
-        className="h-full rounded-full bg-emerald-500 transition-all"
-        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+        className={`h-full rounded-full transition-all ${getColor()}`}
+        style={{ width: `${p}%` }}
       />
     </div>
   );
@@ -118,19 +142,19 @@ function DayItemsSummary({ day }: { day: DaySnapshot }) {
   return (
     <ul className="mt-3 space-y-1.5">
       {items.map((item) => (
-        <li key={item.key} className="flex items-start gap-2 text-sm text-slate-300">
+        <li key={item.key} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
           {item.done === null ? (
-            <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           ) : item.done ? (
-            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
           ) : (
-            <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+            <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-600" />
           )}
-          <span className={item.done ? "text-slate-400" : ""}>
+          <span className={item.done ? "text-slate-500 dark:text-slate-400" : ""}>
             <span className="mr-1.5 text-[10px] uppercase text-slate-500">{item.tag}</span>
             {item.title}
             {item.hours != null ? (
-              <span className="ml-1 text-xs text-amber-200/80">({item.hours}h assigned)</span>
+              <span className="ml-1 text-xs text-amber-800 dark:text-amber-200/80">({item.hours}h assigned)</span>
             ) : null}
           </span>
         </li>
@@ -139,9 +163,10 @@ function DayItemsSummary({ day }: { day: DaySnapshot }) {
   );
 }
 
-type HrmsProjectWork = {
+type DayWorkMetrics = {
   projectId: string;
   projectName: string;
+  dayNumber?: number;
   hoursLogged: number | null;
   productionUnits: number | null;
   entries: number;
@@ -157,18 +182,20 @@ function TrainingWorkPanel({
   workMessage,
 }: {
   day: DaySnapshot;
-  workByProject: HrmsProjectWork[];
+  workByProject: DayWorkMetrics[];
   workLoading: boolean;
   workMessage?: string;
 }) {
   const items = day.workItems || [];
-  if (items.length === 0) return null;
+  const dayMetrics =
+    workByProject.find((p) => p.dayNumber === day.dayNumber) ||
+    workByProject.find((p) => p.projectId === `day-${day.dayNumber}`) ||
+    null;
 
-  function metricsFor(item: DayChecklistItem): HrmsProjectWork | null {
-    const byId = day.hrmsProjectId
-      ? workByProject.find((p) => p.projectId === day.hrmsProjectId)
-      : null;
-    if (byId) return byId;
+  if (items.length === 0 && !dayMetrics) return null;
+
+  function metricsFor(item: DayChecklistItem): DayWorkMetrics | null {
+    if (dayMetrics) return dayMetrics;
     const name = (item.title || day.projectName || "").trim().toLowerCase();
     if (!name) return null;
     return (
@@ -178,31 +205,46 @@ function TrainingWorkPanel({
     );
   }
 
+  const displayItems =
+    items.length > 0
+      ? items
+      : [
+          {
+            id: `day-work-${day.dayNumber}`,
+            title: day.projectName || day.title || `Day ${day.dayNumber} work`,
+            description: null,
+            sortOrder: 0,
+            kind: "WORK" as const,
+            assignedHours: null,
+            completed: false,
+          },
+        ];
+
   return (
     <section>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        <Briefcase className="h-3.5 w-3.5 text-amber-400" />
+      <h3 className={`mb-2 flex items-center gap-2 ${sectionLabel}`}>
+        <Briefcase className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
         Training work
       </h3>
-      <p className="mb-3 text-xs text-slate-500">
-        Progress comes from HRMS tracker (hours / production). No tick needed — incomplete work
+      <p className="mb-3 text-xs text-slate-600 dark:text-slate-500">
+        Hours, production, and quality are recorded by Admin or your Team Lead. Incomplete work
         does not block the next day.
       </p>
-      {workLoading && <p className="mb-2 text-xs text-slate-500">Loading tracker data…</p>}
+      {workLoading && <p className="mb-2 text-xs text-slate-500">Loading work data…</p>}
       {workMessage && !workLoading && (
-        <p className="mb-2 text-xs text-amber-200/90">{workMessage}</p>
+        <p className="mb-2 text-xs text-amber-800 dark:text-amber-200/90">{workMessage}</p>
       )}
       <ul className="space-y-3">
-        {items.map((item) => {
+        {displayItems.map((item) => {
           const m = metricsFor(item);
           return (
             <li
               key={item.id}
-              className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3"
+              className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20"
             >
-              <p className="font-medium text-slate-100">{item.title}</p>
+              <p className="font-medium text-slate-900 dark:text-slate-100">{item.title}</p>
               {item.assignedHours != null && (
-                <p className="mt-0.5 text-sm text-amber-200/90">
+                <p className="mt-0.5 text-sm text-amber-800 dark:text-amber-200/90">
                   Assigned hours: {item.assignedHours}
                 </p>
               )}
@@ -212,34 +254,31 @@ function TrainingWorkPanel({
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Hours logged</p>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
                     {m?.hoursLogged != null ? m.hoursLogged : "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Production</p>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
                     {m?.productionUnits != null ? m.productionUnits : "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Quality</p>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">
                     {m?.qualityScore != null ? `${m.qualityScore}%` : "—"}
                   </p>
                 </div>
               </div>
               {m?.lastActivityAt && (
-                <p className="mt-2 text-xs text-slate-500">
-                  Last activity: {new Date(m.lastActivityAt).toLocaleString()}
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-500">
+                  Last updated: {formatDisplayDateTime(m.lastActivityAt)}
                 </p>
               )}
-              {m?.message && (
-                <p className="mt-1 text-xs text-slate-500">{m.message}</p>
-              )}
               {!m && !workLoading && (
-                <p className="mt-2 text-xs text-slate-500">
-                  No HRMS tracker data linked for this project yet.
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-500">
+                  No work metrics recorded for this day yet.
                 </p>
               )}
             </li>
@@ -267,20 +306,20 @@ function TickList({
       {items.map((item) => (
         <li key={item.id}>
           {readOnly ? (
-            <div className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3">
+            <div className={`flex items-start gap-3 ${itemRow}`}>
               {item.completed ? (
-                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
               )}
               <div>
                 <p
-                  className={`font-medium ${item.completed ? "text-slate-400 line-through" : "text-slate-100"}`}
+                  className={`font-medium ${item.completed ? "text-slate-500 line-through dark:text-slate-400" : "text-slate-900 dark:text-slate-100"}`}
                 >
                   {item.title}
                 </p>
                 {item.assignedHours != null && (
-                  <p className="mt-0.5 text-sm text-amber-200/90">
+                  <p className="mt-0.5 text-sm text-amber-800 dark:text-amber-200/90">
                     Assigned hours: {item.assignedHours}
                   </p>
                 )}
@@ -294,21 +333,21 @@ function TickList({
               type="button"
               disabled={busyId === item.id}
               onClick={() => onToggle(item.id, !item.completed)}
-              className="flex w-full items-start gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3 text-left transition hover:border-slate-600 disabled:opacity-60"
+              className={`flex w-full items-start gap-3 text-left transition hover:border-slate-300 disabled:opacity-60 dark:hover:border-slate-600 ${itemRow}`}
             >
               {item.completed ? (
-                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
               )}
               <div>
                 <p
-                  className={`font-medium ${item.completed ? "text-slate-400 line-through" : "text-slate-100"}`}
+                  className={`font-medium ${item.completed ? "text-slate-500 line-through dark:text-slate-400" : "text-slate-900 dark:text-slate-100"}`}
                 >
                   {item.title}
                 </p>
                 {item.assignedHours != null && (
-                  <p className="mt-0.5 text-sm text-amber-200/90">
+                  <p className="mt-0.5 text-sm text-amber-800 dark:text-amber-200/90">
                     Assigned hours: {item.assignedHours}
                   </p>
                 )}
@@ -334,16 +373,16 @@ function TodayLessons({ day, readOnly }: { day: DaySnapshot; readOnly?: boolean 
         return (
           <li
             key={lesson.linkId}
-            className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3"
+            className={`flex items-center justify-between gap-3 ${itemRow}`}
           >
             <div className="flex min-w-0 items-start gap-3">
               {lesson.completed ? (
-                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
               )}
               <div className="min-w-0">
-                <p className="font-medium text-slate-100">{lesson.label || lesson.title}</p>
+                <p className="font-medium text-slate-900 dark:text-slate-100">{lesson.label || lesson.title}</p>
                 <p className="truncate text-xs text-slate-500">
                   {lesson.courseTitle} · {lesson.moduleTitle}
                   {lesson.watchPercent > 0 && !lesson.completed
@@ -355,7 +394,7 @@ function TodayLessons({ day, readOnly }: { day: DaySnapshot; readOnly?: boolean 
             {!readOnly || lesson.completed ? (
               <Link
                 href={href}
-                className="inline-flex shrink-0 items-center gap-1 text-sm text-blue-400 hover:underline"
+                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
               >
                 {lesson.completed ? "Review" : "Start"}
                 <ChevronRight className="h-4 w-4" />
@@ -383,17 +422,23 @@ function DayContent({
   readOnly?: boolean;
   onToggle: (itemId: string, completed: boolean) => void;
   busyId: string | null;
-  workByProject: HrmsProjectWork[];
+  workByProject: DayWorkMetrics[];
   workLoading: boolean;
   workMessage?: string;
 }) {
   const workItems = day.workItems || [];
+  const hasDayWorkMetrics = workByProject.some(
+    (p) => p.dayNumber === day.dayNumber || p.projectId === `day-${day.dayNumber}`
+  );
   const hasAnything =
-    day.checklist.length > 0 || day.lessons.length > 0 || workItems.length > 0;
+    day.checklist.length > 0 ||
+    day.lessons.length > 0 ||
+    workItems.length > 0 ||
+    hasDayWorkMetrics;
 
   if (!hasAnything) {
     return (
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
         No work on this day yet. Your Team Lead will add checklist items, courses, or training
         work.
       </p>
@@ -422,8 +467,8 @@ function DayContent({
     <div className="space-y-6">
       {day.checklist.length > 0 && (
         <section>
-          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <ClipboardList className="h-3.5 w-3.5 text-sky-400" />
+          <h3 className={`mb-2 flex items-center gap-2 ${sectionLabel}`}>
+            <ClipboardList className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
             Checklist
           </h3>
           <TickList items={day.checklist} onToggle={onToggle} busyId={busyId} />
@@ -431,8 +476,8 @@ function DayContent({
       )}
       {day.lessons.length > 0 && (
         <section>
-          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <BookOpen className="h-3.5 w-3.5 text-blue-400" />
+          <h3 className={`mb-2 flex items-center gap-2 ${sectionLabel}`}>
+            <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             Courses / videos
           </h3>
           <TodayLessons day={day} />
@@ -457,7 +502,7 @@ export function TrainingDayClient({ plan: initial }: Props) {
   const [msg, setMsg] = useState("");
   const [viewDayNumber, setViewDayNumber] = useState<number | null>(null);
   const [showAllPast, setShowAllPast] = useState(false);
-  const [workByProject, setWorkByProject] = useState<HrmsProjectWork[]>([]);
+  const [workByProject, setWorkByProject] = useState<DayWorkMetrics[]>([]);
   const [workLoading, setWorkLoading] = useState(false);
   const [workMessage, setWorkMessage] = useState("");
 
@@ -465,18 +510,18 @@ export function TrainingDayClient({ plan: initial }: Props) {
     void (async () => {
       setWorkLoading(true);
       try {
-        const res = await fetch("/api/hrms/work");
+        const res = await fetch("/api/trainee-work");
         const data = await res.json();
         if (res.ok) {
           setWorkByProject(data.projects || []);
           setWorkMessage(data.message || "");
         } else {
           setWorkByProject([]);
-          setWorkMessage(data.error || "Could not load HRMS work");
+          setWorkMessage(data.error || "Could not load work metrics");
         }
       } catch {
         setWorkByProject([]);
-        setWorkMessage("Could not load HRMS work");
+        setWorkMessage("Could not load work metrics");
       } finally {
         setWorkLoading(false);
       }
@@ -505,8 +550,15 @@ export function TrainingDayClient({ plan: initial }: Props) {
     return pastDays.find((d) => d.dayNumber === viewDayNumber) ?? today;
   }, [viewDayNumber, today, pastDays]);
 
-  const isReviewingPast =
+  const isViewingOtherDay =
     Boolean(today && viewing && viewing.dayNumber !== today.dayNumber);
+  // Open days (≤ current) stay editable until done; completed past days are review-only.
+  // Admin can open later days early — trainee may finish open days in any order.
+  const canEditViewing =
+    Boolean(viewing) &&
+    viewing!.dayNumber <= plan.currentDay &&
+    (viewing!.dayNumber === plan.currentDay || !viewing!.done);
+  const readOnly = !canEditViewing;
 
   async function toggleChecklist(itemId: string, completed: boolean) {
     setBusyId(itemId);
@@ -526,14 +578,15 @@ export function TrainingDayClient({ plan: initial }: Props) {
       setPlan(data.plan);
       setViewDayNumber(null);
     }
-    router.refresh();
+    // Force immediate refresh to update progress bars
+    await router.refresh();
   }
 
   if (plan.source === "empty" || !today || !viewing) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center">
-        <h2 className="text-xl font-bold">Your day plan</h2>
-        <p className="mt-2 text-slate-400">
+      <div className="mx-auto max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Your day plan</h2>
+        <p className="mt-2 text-slate-600 dark:text-slate-400">
           No day-wise curriculum has been set up yet. Ask Admin or your Team Lead to create Day 1
           checklist and training days.
         </p>
@@ -545,43 +598,85 @@ export function TrainingDayClient({ plan: initial }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 pb-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Today&apos;s work</h1>
-        <p className="mt-1 text-slate-400">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Today&apos;s work
+          </h1>
+          <ProgressBandBadge
+            overallPercent={plan.overallPercent}
+            currentDay={plan.currentDay}
+            totalDays={plan.totalDays}
+            showPace
+          />
+        </div>
+        <p className="mt-2 text-slate-600 dark:text-slate-400">
           Day {today.dayNumber} of {plan.totalDays}
           {today.projectName ? ` · ${today.projectName}` : ""}
+          {plan.trainingStart ? ` · Started ${formatDisplayDate(plan.trainingStart)}` : ""}
         </p>
+        {(plan.dueSummary.overdueCount > 0 ||
+          plan.dueSummary.dueTodayCount > 0 ||
+          plan.dueSummary.doneLateCount > 0) && (
+          <p className="mt-2 text-sm">
+            {plan.dueSummary.overdueCount > 0 && (
+              <span className="font-medium text-red-800 dark:text-red-300">
+                {plan.dueSummary.overdueCount} overdue
+              </span>
+            )}
+            {plan.dueSummary.dueTodayCount > 0 && (
+              <span className="font-medium text-amber-900 dark:text-amber-200">
+                {plan.dueSummary.overdueCount > 0 ? " · " : ""}
+                {plan.dueSummary.dueTodayCount} due today
+              </span>
+            )}
+            {plan.dueSummary.doneLateCount > 0 && (
+              <span className="font-medium text-orange-900 dark:text-orange-200">
+                {(plan.dueSummary.overdueCount > 0 ||
+                  plan.dueSummary.dueTodayCount > 0) &&
+                  " · "}
+                {formatFinishedLateLabel(plan.dueSummary.doneLateCount)}
+              </span>
+            )}
+          </p>
+        )}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Today</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{today.percent}%</p>
+          <div className={statCard}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-500">
+              Today
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">
+              {today.percent}%
+            </p>
             <ProgressBar percent={today.percent} />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-500">
               {today.completedCount}/{today.totalCount} items
             </p>
           </div>
-          <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Training overall</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+          <div className={statCard}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-500">
+              Training overall
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">
               {plan.overallPercent}%
             </p>
             <ProgressBar percent={plan.overallPercent} />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-500">
               Across {plan.totalDays} day{plan.totalDays === 1 ? "" : "s"}
             </p>
           </div>
         </div>
       </div>
 
-      {!isReviewingPast && daysWithFeedback.length > 0 && (
-        <div className="rounded-2xl border border-blue-800/40 bg-blue-950/20 p-5">
-          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-200">
+      {!isViewingOtherDay && daysWithFeedback.length > 0 && (
+        <div className={`${panelCard} border-blue-200 dark:border-blue-800/40`}>
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-200">
             <MessageSquare className="h-4 w-4" />
             Team Lead feedback
           </h3>
-          <p className="mb-4 text-sm text-slate-400">
+          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
             Reviews from your lead for completed days — visible here without opening past days.
           </p>
           <ul className="space-y-3">
@@ -597,71 +692,102 @@ export function TrainingDayClient({ plan: initial }: Props) {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {plan.allDays.map((d) => {
           const isCurrent = d.dayNumber === plan.currentDay;
-          const isPast = d.dayNumber < plan.currentDay;
+          const isOpen = d.dayNumber <= plan.currentDay;
           const selected =
             (viewDayNumber ?? today.dayNumber) === d.dayNumber;
-          const clickable = isCurrent || isPast;
+          const clickable = isOpen;
+          const due = d.due;
           return (
             <button
               key={d.dayNumber}
               type="button"
               disabled={!clickable}
-              title={`${d.title}${d.projectName ? ` — ${d.projectName}` : ""}`}
+              title={`${d.title}${d.projectName ? ` — ${d.projectName}` : ""}${
+                due?.label ? ` · ${due.label}` : ""
+              }`}
               onClick={() => setViewDayNumber(isCurrent ? null : d.dayNumber)}
-              className={`shrink-0 rounded-xl px-3 py-2 text-sm transition ${
+              className={`shrink-0 rounded-xl border px-3 py-2 text-sm transition ${
                 selected
-                  ? "bg-blue-600 text-white"
+                  ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                   : d.done
-                    ? "bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60"
-                    : isPast
-                      ? "bg-amber-900/30 text-amber-200 hover:bg-amber-900/50"
-                      : "cursor-default bg-slate-800 text-slate-500"
+                    ? due?.status === "DONE_LATE"
+                      ? "border-orange-200 bg-orange-50 text-orange-900 hover:bg-orange-100 dark:border-transparent dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-transparent dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
+                    : due?.status === "OVERDUE"
+                      ? "border-red-200 bg-red-50 text-red-800 hover:bg-red-100 dark:border-transparent dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950/70"
+                      : isOpen
+                        ? "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-transparent dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                        : "cursor-default border-slate-200 bg-slate-100 text-slate-500 dark:border-transparent dark:bg-slate-800 dark:text-slate-500"
               }`}
             >
-              D{d.dayNumber}
+              <span className="block">D{d.dayNumber}</span>
+              {due?.label && isOpen && (
+                <span
+                  className={`mt-0.5 block text-[10px] leading-tight ${
+                    selected ? "text-blue-100" : dueBadgeClass(due.status)
+                  }`}
+                >
+                  {due.status === "OVERDUE"
+                    ? `${due.daysLate}d late`
+                    : due.status === "DONE_LATE"
+                      ? `${due.daysLate}d late`
+                      : due.status === "DUE_TODAY"
+                        ? "Due"
+                        : due.status === "DONE_ON_TIME"
+                          ? "Done"
+                          : due.label}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {isReviewingPast && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm">
-          <span className="inline-flex items-center gap-2 text-slate-300">
-            <Eye className="h-4 w-4 text-slate-400" />
-            Reviewing Day {viewing.dayNumber} (read-only)
+      {isViewingOtherDay && (
+        <div className={`flex flex-wrap items-center justify-between gap-2 text-sm ${itemRow}`}>
+          <span className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <Eye className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+            {readOnly
+              ? `Reviewing Day ${viewing.dayNumber} (read-only)`
+              : `Catching up Day ${viewing.dayNumber}${
+                  viewing.due?.status === "OVERDUE"
+                    ? ` · ${viewing.due.label}`
+                    : ""
+                }`}
           </span>
           <button
             type="button"
             onClick={() => setViewDayNumber(null)}
-            className="text-blue-400 hover:underline"
+            className="font-medium text-blue-700 hover:underline dark:text-blue-400"
           >
             Back to today
           </button>
         </div>
       )}
 
-      {!isReviewingPast && pastDays.length > 0 && (
-        <div className="rounded-2xl border border-slate-700/80 bg-slate-900/40 p-5">
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+      {!isViewingOtherDay && pastDays.length > 0 && (
+        <div className={panelCard}>
+          <h3 className={`mb-2 flex items-center gap-2 ${sectionLabel}`}>
             <History className="h-4 w-4" />
             Previous days
           </h3>
-          <div className="rounded-xl border border-slate-700/60 bg-slate-950/40 p-4">
-            <p className="font-medium text-slate-200">
+          <div className={`${itemRow} dark:bg-slate-950/40`}>
+            <p className="font-medium text-slate-900 dark:text-slate-200">
               Yesterday — Day {pastDays[0].dayNumber}: {pastDays[0].title}
               {pastDays[0].projectName ? ` · ${pastDays[0].projectName}` : ""}
             </p>
             <DayItemsSummary day={pastDays[0]} />
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-600 dark:text-slate-500">
               {pastDays[0].completedCount}/{pastDays[0].totalCount} done · {pastDays[0].percent}%
+              {pastDays[0].due?.label ? ` · ${pastDays[0].due.label}` : ""}
               {pastDays[0].review ? " · Lead feedback available" : ""}
             </p>
             <button
               type="button"
               onClick={() => setViewDayNumber(pastDays[0].dayNumber)}
-              className="mt-3 text-sm text-blue-400 hover:underline"
+              className="mt-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
             >
-              Open day review
+              {pastDays[0].done ? "Open day review" : "Continue this day"}
             </button>
           </div>
 
@@ -670,7 +796,7 @@ export function TrainingDayClient({ plan: initial }: Props) {
               <button
                 type="button"
                 onClick={() => setShowAllPast((v) => !v)}
-                className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"
+                className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
               >
                 <ChevronDown
                   className={`h-4 w-4 transition ${showAllPast ? "rotate-180" : ""}`}
@@ -682,19 +808,20 @@ export function TrainingDayClient({ plan: initial }: Props) {
                   {pastDays.slice(1).map((day) => (
                     <li
                       key={day.dayNumber}
-                      className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3"
+                      className={`${itemRow} p-3 dark:bg-slate-950/30`}
                     >
                       <button
                         type="button"
                         onClick={() => setViewDayNumber(day.dayNumber)}
                         className="w-full text-left"
                       >
-                        <p className="font-medium text-slate-200">
+                        <p className="font-medium text-slate-900 dark:text-slate-200">
                           Day {day.dayNumber}: {day.title}
                           {day.projectName ? ` · ${day.projectName}` : ""}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           {day.completedCount}/{day.totalCount} · {day.percent}%
+                          {day.due?.label ? ` · ${day.due.label}` : ""}
                           {day.review ? " · Lead feedback" : ""}
                         </p>
                       </button>
@@ -707,33 +834,62 @@ export function TrainingDayClient({ plan: initial }: Props) {
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-6">
+      <div className={`${panelCard} p-6`}>
         <div className="mb-1 flex flex-wrap items-center gap-2">
-          <Layers className="h-5 w-5 text-blue-400" />
-          <h2 className="text-lg font-semibold">{viewing.title}</h2>
+          <Layers className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{viewing.title}</h2>
           {viewing.done ? (
-            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">
-              Done
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                viewing.due?.status === "DONE_LATE"
+                  ? dueToneClass("DONE_LATE")
+                  : dueToneClass("DONE_ON_TIME")
+              }`}
+            >
+              {viewing.due?.status === "DONE_LATE"
+                ? viewing.due.label
+                : "Done"}
             </span>
           ) : (
-            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
-              {viewing.completedCount}/{viewing.totalCount}
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                viewing.due?.status === "OVERDUE"
+                  ? dueToneClass("OVERDUE")
+                  : viewing.due?.status === "DUE_TODAY"
+                    ? dueToneClass("DUE_TODAY")
+                    : dueToneClass("UPCOMING")
+              }`}
+            >
+              {viewing.due?.status === "OVERDUE" ||
+              viewing.due?.status === "DUE_TODAY"
+                ? viewing.due.label
+                : `${viewing.completedCount}/${viewing.totalCount}`}
             </span>
           )}
         </div>
         {viewing.description && (
-          <p className="mb-4 text-sm text-slate-400">{viewing.description}</p>
+          <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">{viewing.description}</p>
+        )}
+        {viewing.due?.dueDate && (
+          <p className="mb-3 text-xs text-slate-500">
+            Due {formatDisplayDate(viewing.due.dueDate)}
+            {viewing.completedAt
+              ? ` · Completed ${formatDisplayDateTime(viewing.completedAt)}`
+              : ""}
+          </p>
         )}
         <div className="mb-4 space-y-1">
           <ProgressBar percent={viewing.percent} />
           <p className="text-xs text-slate-500">
-            {isReviewingPast ? `Day ${viewing.dayNumber}` : "Today"}: {viewing.percent}%
+            {isViewingOtherDay ? `Day ${viewing.dayNumber}` : "Today"}:{" "}
+            {viewing.percent}%
+            {readOnly ? "" : " · editable"}
           </p>
         </div>
 
         <DayContent
           day={viewing}
-          readOnly={isReviewingPast}
+          readOnly={readOnly}
           onToggle={toggleChecklist}
           busyId={busyId}
           workByProject={workByProject}
@@ -743,7 +899,7 @@ export function TrainingDayClient({ plan: initial }: Props) {
 
         <LeadReviewCard day={viewing} />
 
-        {msg && <p className="mt-4 text-sm text-amber-300">{msg}</p>}
+        {msg && <p className="mt-4 text-sm text-amber-800 dark:text-amber-300">{msg}</p>}
       </div>
 
       <FinalExamGateCard />
@@ -751,7 +907,7 @@ export function TrainingDayClient({ plan: initial }: Props) {
       {plan.readyForProduction && <TrackerProgressPanel />}
 
       {plan.trainingStatus === "AWAITING_EVALUATION" && !plan.readyForProduction && (
-        <p className="rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
           Training days are finished. Open the Final Quiz when you are ready — one attempt. Your
           score is one part of how Admin reviews overall performance.
         </p>
@@ -760,13 +916,13 @@ export function TrainingDayClient({ plan: initial }: Props) {
       <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
         <Link
           href="/trainee/progress"
-          className="text-slate-400 hover:text-slate-200 hover:underline"
+          className="text-slate-600 hover:text-slate-900 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
         >
           View full progress
         </Link>
         <Link
           href="/trainee/courses"
-          className="inline-flex items-center gap-2 text-blue-400 hover:underline"
+          className="inline-flex items-center gap-2 font-medium text-blue-700 hover:underline dark:text-blue-400"
         >
           <BookOpen className="h-4 w-4" />
           Review past lessons

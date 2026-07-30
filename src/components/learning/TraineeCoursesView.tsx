@@ -17,6 +17,15 @@ import { ProgressRing } from "@/components/learning/ProgressRing";
 import { cn } from "@/lib/utils";
 import type { LibraryCourse, LibraryLesson } from "@/lib/course-library";
 
+const libraryFadePanel =
+  "relative overflow-hidden rounded-2xl border border-slate-700 bg-gradient-to-br from-emerald-500/20 via-emerald-500/5 to-transparent bg-slate-900/50";
+
+const panelCard =
+  "rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none";
+
+const btnPrimary =
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500";
+
 function lessonStatus(lesson: LibraryLesson) {
   if (lesson.access === "locked") return { label: "Locked", tone: "locked" as const };
   if (lesson.completed || lesson.access === "completed") {
@@ -60,21 +69,31 @@ export function TraineeCoursesView({
 
   if (courses.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl space-y-8">
-        <Header mode={mode} completedCount={0} inProgressCount={0} total={0} currentDay={currentDay} />
-        <div className="flex flex-col items-center rounded-2xl border border-slate-800 bg-slate-900/50 px-6 py-16 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800/80">
+      <div className="mx-auto max-w-5xl space-y-4 pb-4">
+        <Header
+          mode={mode}
+          completedCount={0}
+          inProgressCount={0}
+          total={0}
+          currentDay={currentDay}
+        />
+        <div
+          className={`flex flex-col items-center px-6 py-16 text-center ${panelCard}`}
+        >
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800/80">
             <BookOpen className="h-7 w-7 text-slate-500" />
           </div>
-          <h3 className="text-lg font-semibold text-white">Nothing to review yet</h3>
-          <p className="mt-2 max-w-sm text-sm text-slate-400">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Nothing to review yet
+          </h3>
+          <p className="mt-2 max-w-sm text-sm text-slate-600 dark:text-slate-400">
             {mode === "empty" || mode === "curriculum"
               ? "Lessons appear here once your Team Lead adds them to the day-wise plan. Start with Today’s Work."
               : "No courses assigned yet. Check Today’s Work for your daily plan."}
           </p>
           <Link
             href="/trainee/training"
-            className="mt-6 inline-flex items-center gap-2 text-sm text-blue-400 hover:underline"
+            className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
           >
             <ClipboardCheck className="h-4 w-4" />
             Go to Today&apos;s Work
@@ -85,7 +104,7 @@ export function TraineeCoursesView({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-4 pb-4">
       <Header
         mode={mode}
         completedCount={completedCount}
@@ -113,15 +132,15 @@ export function TraineeCoursesView({
               className={cn(
                 "group relative overflow-hidden rounded-2xl border transition",
                 isComplete
-                  ? "border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 via-[#1a2234]/90 to-[#1a2234]/90"
-                  : "border-slate-700/80 bg-gradient-to-br from-blue-950/50 via-[#1a2234]/95 to-[#111827]/95",
-                "hover:border-slate-500/60"
+                  ? "border-emerald-200 bg-white shadow-sm dark:border-emerald-500/20 dark:bg-slate-900/50 dark:shadow-none"
+                  : "border-slate-200 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-900/50 dark:shadow-none",
+                "hover:border-slate-300 dark:hover:border-slate-500/60"
               )}
             >
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 w-1",
-                  isComplete ? "bg-emerald-400" : "bg-blue-500"
+                  isComplete ? "bg-emerald-500" : "bg-blue-600"
                 )}
               />
 
@@ -134,17 +153,17 @@ export function TraineeCoursesView({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-lg font-semibold tracking-tight text-white sm:text-xl">
+                    <h2 className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl dark:text-white">
                       {course.title}
                     </h2>
                     <StatusPill status={course.status} percent={course.progressPercent} />
                   </div>
                   {course.description && (
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-400">
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-400">
                       {course.description}
                     </p>
                   )}
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                     <span>
                       {course.completedLessons}/{course.totalLessons} lessons
                     </span>
@@ -158,10 +177,10 @@ export function TraineeCoursesView({
                     <Link
                       href={ctaHref}
                       className={cn(
-                        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition",
+                        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
                         isComplete
-                          ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
-                          : "bg-blue-600 text-white shadow-lg shadow-blue-900/30 hover:bg-blue-500"
+                          ? "border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200 dark:hover:bg-emerald-500/20"
+                          : btnPrimary
                       )}
                     >
                       {isComplete ? (
@@ -179,7 +198,7 @@ export function TraineeCoursesView({
                   ) : (
                     <Link
                       href="/trainee/training"
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
                     >
                       <Lock className="h-4 w-4" />
                       See today&apos;s plan
@@ -188,7 +207,7 @@ export function TraineeCoursesView({
                   <button
                     type="button"
                     onClick={() => toggle(course.enrollmentId)}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200"
                     aria-expanded={open}
                   >
                     {open ? "Hide outline" : "Show outline"}
@@ -200,7 +219,7 @@ export function TraineeCoursesView({
               </div>
 
               {open && (
-                <div className="border-t border-slate-700/60 bg-slate-950/30 px-5 py-4 pl-6">
+                <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 pl-6 dark:border-slate-700/60 dark:bg-slate-950/30">
                   <div className="space-y-5">
                     {course.modules.map((mod) => {
                       const done = mod.lessons.filter((l) => l.completed).length;
@@ -210,25 +229,25 @@ export function TraineeCoursesView({
                       return (
                         <div key={mod.id}>
                           <div className="mb-2 flex items-center justify-between gap-3">
-                            <h3 className="text-sm font-medium text-slate-200">
+                            <h3 className="text-sm font-medium text-slate-900 dark:text-slate-200">
                               {mod.title}
                             </h3>
                             <span className="text-[11px] tabular-nums text-slate-500">
                               {done}/{mod.lessons.length}
                             </span>
                           </div>
-                          <div className="mb-3 h-1 overflow-hidden rounded-full bg-slate-800">
+                          <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                             <div
                               className={cn(
                                 "h-full rounded-full transition-all",
                                 pct >= 100
-                                  ? "bg-emerald-400"
-                                  : "bg-gradient-to-r from-blue-500 to-cyan-400"
+                                  ? "bg-emerald-500"
+                                  : "bg-gradient-to-r from-blue-600 to-cyan-500"
                               )}
                               style={{ width: `${pct}%` }}
                             />
                           </div>
-                          <ul className="divide-y divide-slate-800/80 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
+                          <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white dark:divide-slate-800/80 dark:border-slate-800/80 dark:bg-slate-900/40">
                             {mod.lessons.map((lesson, idx) => {
                               const status = lessonStatus(lesson);
                               const locked = lesson.access === "locked";
@@ -236,20 +255,22 @@ export function TraineeCoursesView({
                                 "flex items-center gap-3 px-3 py-2.5 transition";
                               const inner = (
                                 <>
-                                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-[11px] font-medium text-slate-400">
+                                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                                     {idx + 1}
                                   </span>
                                   {locked ? (
-                                    <Lock className="h-4 w-4 shrink-0 text-slate-600" />
+                                    <Lock className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-600" />
                                   ) : lesson.completed ? (
-                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                   ) : (
-                                    <Circle className="h-4 w-4 shrink-0 text-slate-600" />
+                                    <Circle className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-600" />
                                   )}
                                   <span
                                     className={cn(
                                       "min-w-0 flex-1 truncate text-sm",
-                                      locked ? "text-slate-500" : "text-slate-200"
+                                      locked
+                                        ? "text-slate-500"
+                                        : "text-slate-800 dark:text-slate-200"
                                     )}
                                   >
                                     {lesson.title}
@@ -260,7 +281,7 @@ export function TraineeCoursesView({
                                     )}
                                   </span>
                                   {lesson.quizCount > 0 && !locked && (
-                                    <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">
+                                    <span className="inline-flex items-center gap-1 rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[10px] font-medium text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
                                       <HelpCircle className="h-3 w-3" />
                                       {lesson.quizCount > 1
                                         ? `${lesson.quizCount} quizzes`
@@ -271,15 +292,15 @@ export function TraineeCoursesView({
                                     className={cn(
                                       "shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium",
                                       status.tone === "done" &&
-                                        "bg-emerald-500/15 text-emerald-300",
+                                        "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
                                       status.tone === "quiz" &&
-                                        "bg-amber-500/15 text-amber-300",
+                                        "bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
                                       status.tone === "progress" &&
-                                        "bg-blue-500/15 text-blue-300",
+                                        "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
                                       status.tone === "idle" &&
-                                        "bg-slate-800 text-slate-400",
+                                        "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
                                       status.tone === "locked" &&
-                                        "bg-slate-800/80 text-slate-500"
+                                        "bg-slate-100 text-slate-500 dark:bg-slate-800/80 dark:text-slate-500"
                                     )}
                                   >
                                     {status.label}
@@ -296,7 +317,10 @@ export function TraineeCoursesView({
                                   ) : (
                                     <Link
                                       href={`/trainee/courses/${course.courseId}/player?lesson=${lesson.id}`}
-                                      className={cn(rowClass, "hover:bg-slate-800/50")}
+                                      className={cn(
+                                        rowClass,
+                                        "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                                      )}
                                     >
                                       {inner}
                                     </Link>
@@ -333,22 +357,23 @@ function Header({
   currentDay: number;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-700/70 bg-gradient-to-r from-slate-900 via-[#152038] to-slate-900 px-6 py-7">
-      <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 left-20 h-40 w-40 rounded-full bg-cyan-400/5 blur-3xl" />
+    <div className={cn(libraryFadePanel, "px-6 py-7")}>
+      <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-emerald-300/20 blur-3xl dark:bg-blue-500/10" />
       <div className="relative">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300/80">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-800 dark:text-blue-300/90">
           Review
         </p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-white">Course library</h1>
-        <p className="mt-2 max-w-xl text-sm text-slate-400">
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+          Course library
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-slate-700 dark:text-slate-400">
           {mode === "curriculum"
             ? `Revisit lessons you’ve unlocked. Future days stay locked until you reach them (you’re on Day ${currentDay}). Daily work lives in Today’s Work.`
             : "Revisit lessons anytime. Your day-by-day plan is in Today’s Work."}
         </p>
         <Link
           href="/trainee/training"
-          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-400 hover:underline"
+          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
         >
           <ClipboardCheck className="h-4 w-4" />
           Go to Today&apos;s Work
@@ -378,13 +403,17 @@ function StatChip({
     <div
       className={cn(
         "rounded-xl border px-3 py-2",
-        accent === "blue" && "border-blue-500/25 bg-blue-500/10",
-        accent === "emerald" && "border-emerald-500/25 bg-emerald-500/10",
-        !accent && "border-slate-700 bg-slate-900/60"
+        accent === "blue" &&
+          "border-blue-200 bg-blue-50 dark:border-blue-500/25 dark:bg-blue-500/10",
+        accent === "emerald" &&
+          "border-emerald-200 bg-emerald-50 dark:border-emerald-500/25 dark:bg-emerald-500/10",
+        !accent && "border-slate-200 bg-white/90 dark:border-slate-700 dark:bg-slate-900/60"
       )}
     >
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-lg font-semibold tabular-nums text-white">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-500">
+        {label}
+      </p>
+      <p className="text-lg font-semibold tabular-nums text-slate-900 dark:text-white">{value}</p>
     </div>
   );
 }
@@ -396,9 +425,10 @@ function StatusPill({ status, percent }: { status: string; percent: number }) {
     <span
       className={cn(
         "rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
-        done && "bg-emerald-500/20 text-emerald-300",
-        active && "bg-blue-500/20 text-blue-300",
-        !done && !active && "bg-slate-700/80 text-slate-400"
+        done &&
+          "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+        active && "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+        !done && !active && "bg-slate-100 text-slate-600 dark:bg-slate-700/80 dark:text-slate-400"
       )}
     >
       {done ? "Completed" : active ? "In progress" : "Not started"}

@@ -331,11 +331,11 @@ export function CoursePlayer({
   const hasQuiz = lessonQuizzes.length > 0;
   const allQuizzesPassed =
     !hasQuiz || lessonQuizzes.every((q) => passedQuizIds.has(q.id));
-  // Unlock only when THIS lesson's content is done — not because another lesson was completed
+  // Unlock when lesson type is QUIZ or when user has started watching content
   const contentDone =
     activeLesson.lessonType === "QUIZ" || (lp?.watchPercent ?? 0) >= 90;
   const quizUnlocked =
-    hasQuiz && (activeLesson.lessonType === "QUIZ" || contentDone);
+    hasQuiz && (activeLesson.lessonType === "QUIZ" || (lp?.watchPercent ?? 0) > 0);
   const markLabel =
     hasQuiz && !allQuizzesPassed
       ? contentDone
@@ -356,7 +356,7 @@ export function CoursePlayer({
       <div className="flex flex-1 gap-4 overflow-hidden">
         {/* Left: Module navigation */}
         <aside className="glass-panel w-64 shrink-0 overflow-y-auto p-4">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500">
             Curriculum
           </h3>
           {course.modules.map((mod) => (
@@ -368,15 +368,15 @@ export function CoursePlayer({
                   else next.add(mod.id);
                   setExpandedModules(next);
                 }}
-                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-slate-800/50"
+                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50"
               >
                 {mod.title}
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-slate-500">
                   {expandedModules.has(mod.id) ? "−" : "+"}
                 </span>
               </button>
               {expandedModules.has(mod.id) && (
-                <ul className="ml-2 space-y-1 border-l border-slate-700 pl-2">
+                <ul className="ml-2 space-y-1 border-l border-slate-300 dark:border-slate-700 pl-2">
                   {mod.lessons.map((lesson) => {
                     const p = localProgress[lesson.id];
                     return (
@@ -386,17 +386,17 @@ export function CoursePlayer({
                           className={cn(
                             "w-full rounded-lg px-2 py-2 text-left text-xs transition",
                             activeId === lesson.id
-                              ? "bg-blue-600/30 text-blue-200"
-                              : "text-slate-400 hover:bg-slate-800/50"
+                              ? "bg-blue-600/30 text-blue-700 dark:text-blue-200"
+                              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50"
                           )}
                         >
                           <span className="flex items-center gap-1">
                             {p?.completed && (
-                              <Check className="h-3 w-3 text-emerald-400" />
+                              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                             )}
                             {lesson.title}
                             {(lesson.quizzes?.length ?? 0) > 0 && (
-                              <span className="ml-auto rounded bg-violet-600/20 px-1 text-[10px] text-violet-300">
+                              <span className="ml-auto rounded bg-violet-600/20 px-1 text-[10px] text-violet-700 dark:text-violet-300">
                                 {lesson.quizzes!.length > 1
                                   ? `${lesson.quizzes!.length} Quizzes`
                                   : "Quiz"}
@@ -597,7 +597,7 @@ export function CoursePlayer({
                 />
                 <button
                   onClick={saveNote}
-                  className="mt-2 w-full rounded-xl bg-slate-700 py-2 text-sm hover:bg-slate-600"
+                  className="mt-2 w-full rounded-xl bg-blue-600 py-2 text-sm text-white hover:bg-blue-500"
                 >
                   Save Notes
                 </button>

@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  bandBadgeClass,
-  bandRowClass,
-  type EvaluationBandInfo,
-} from "@/lib/evaluation";
-import { CalendarPlus, CheckCircle2, XCircle } from "lucide-react";
+import { CalendarPlus, Loader2, RotateCcw, UserCheck, UserX } from "lucide-react";
+import { type EvaluationBandInfo } from "@/lib/evaluation";
+import { SectionLoader, WorkingBanner } from "@/components/ui/SectionLoader";
+import { formatRole } from "@/lib/roles";
 
 type Row = {
   id: string;
@@ -19,43 +17,93 @@ type Row = {
   finalQuizAttemptedAt: string | null;
   band: EvaluationBandInfo;
   evaluationCycle: number;
+  previousQuizAttempts?: { cycle: number; score: number; createdAt: string }[];
+  quizRetakePending?: boolean;
+  quizRetakeGrantedAt?: string | null;
+  quizRetakeGrantedBy?: { id: string; name: string; role: string } | null;
+  lastFinalQuizScore?: number | null;
+  finalQuizCertificateStatus?: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | null;
+  workSummary?: {
+    hoursLogged: number | null;
+    productionUnits: number | null;
+    entries: number;
+    qualityScore: number | null;
+  } | null;
 };
 
-type Props = {
-  /** When true, show Reject / Approve / +1 week (Admin only). */
-  canDecide?: boolean;
-};
+const panelShell =
+  "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/40 dark:shadow-none";
 
-export function EvaluationDecisionPanel({ canDecide = false }: Props) {
+function formatPrevScores(attempts?: { cycle: number; score: number }[]) {
+  if (!attempts?.length) return null;
+  return attempts.map((a) => `C${a.cycle}: ${a.score}%`).join(" · ");
+}
+
+function statusLabel(r: Row) {
+  if (r.trainingStatus === "APPROVED_IN_ORG" || r.readyForProduction) return "Hired";
+  if (r.trainingStatus === "REJECTED") return "Not hired";
+  if (r.scheduleComplete) return "Awaiting decision";
+  return r.trainingStatus || "In progress";
+}
+
+function statusBadgeClass(r: Row) {
+  if (r.trainingStatus === "APPROVED_IN_ORG" || r.readyForProduction) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300";
+  }
+  if (r.trainingStatus === "REJECTED") {
+    return "border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300";
+  }
+  if (r.scheduleComplete) {
+    return "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200";
+  }
+  return "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400";
+}
+
+function quizScoreClass(score: number | null) {
+  if (score == null) return "text-slate-500";
+  if (score >= 90) return "text-emerald-700 dark:text-emerald-300";
+  if (score >= 70) return "text-amber-800 dark:text-amber-200";
+  return "text-red-700 dark:text-red-300";
+}
+
+const btnSecondary =
+  "inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800";
+
+export function EvaluationDecisionPanel() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyLabel, setBusyLabel] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch("/api/curriculum/progress");
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error || "Failed to load");
-      return;
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
+    try {
+      const res = await fetch("/api/curriculum/progress");
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to load");
+        return;
+      }
+      setError("");
+      const all: Row[] = (data.trainees || []).map(
+        (t: Row & { overallPercent?: number }) => t
+      );
+      const relevant = all.filter(
+        (t) =>
+          t.scheduleComplete ||
+          t.finalQuizScore != null ||
+          (t.previousQuizAttempts?.length ?? 0) > 0 ||
+          t.quizRetakePending ||
+          t.trainingStatus === "REJECTED" ||
+          t.trainingStatus === "APPROVED_IN_ORG" ||
+          t.readyForProduction
+      );
+      setRows(relevant);
+    } finally {
+      setLoading(false);
     }
-    setError("");
-    const all: Row[] = (data.trainees || []).map(
-      (t: Row & { overallPercent?: number }) => t
-    );
-    // Show trainees who finished schedule, took the quiz, or already decided
-    const relevant = all.filter(
-      (t) =>
-        t.scheduleComplete ||
-        t.finalQuizScore != null ||
-        t.trainingStatus === "REJECTED" ||
-        t.trainingStatus === "APPROVED_IN_ORG" ||
-        t.readyForProduction
-    );
-    setRows(relevant);
   }, []);
 
   useEffect(() => {
@@ -63,183 +111,295 @@ export function EvaluationDecisionPanel({ canDecide = false }: Props) {
   }, [load]);
 
   async function decide(traineeId: string, name: string, action: string) {
+    let days: number | undefined;
+    if (action === "extendWeek") {
+      const raw = prompt(
+        `How many extra days for ${name}?\n7 = one week, 14 = two weeks. Max 60.`,
+        "7"
+      );
+      if (raw == null) return;
+      days = Number(raw.trim());
+      if (!Number.isFinite(days) || days < 1 || days > 60) {
+        setMsg("Enter a number of days between 1 and 60");
+        return;
+      }
+    }
+
     const labels: Record<string, string> = {
-      reject: `Reject ${name}? Their account will be deactivated.`,
-      approve: `Approve ${name} into the org? Requires ≥90% on the final quiz.`,
-      extendWeek: `Add +1 week for ${name}? The Extra week default schedule will be copied to their personal plan (Team Lead can edit it). They also get one new final-quiz attempt after those days.`,
+      reject: `Mark ${name} as not hired and deactivate their account?`,
+      approve: `Hire ${name} into the organization?\n\nRequires final quiz ≥90%.`,
+      extendWeek: `Add ${days} day${days === 1 ? "" : "s"} for ${name}?`,
+      allowRetake: `Allow ${name} to retake the final quiz?\n\nTheir previous score stays on record.`,
+      approveCertificate: `Approve ${name}'s final quiz certificate?\n\nThey can view it on Certifications.`,
     };
     if (!confirm(labels[action] || "Confirm?")) return;
 
     setBusyId(traineeId);
-    setMsg("");
-    const res = await fetch(`/api/admin/trainees/${traineeId}/decision`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    const data = await res.json();
-    setBusyId(null);
-    if (!res.ok) {
-      setMsg(data.error || "Action failed");
-      return;
-    }
-    setMsg(
-      action === "reject"
-        ? `${name} rejected and deactivated.`
+    setBusyLabel(
+      action === "extendWeek"
+        ? `Adding ${days} day${days === 1 ? "" : "s"} for ${name}…`
         : action === "approve"
-          ? `${name} approved into the org.`
-          : `Extra week added for ${name}.`
+          ? `Hiring ${name}…`
+          : action === "allowRetake"
+            ? `Allowing quiz retake for ${name}…`
+            : action === "approveCertificate"
+              ? `Approving certificate for ${name}…`
+              : `Updating ${name}…`
     );
-    await load();
+    setMsg("");
+    try {
+      const res = await fetch(`/api/admin/trainees/${traineeId}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          ...(action === "extendWeek" ? { days } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || "Action failed");
+        return;
+      }
+      setBusyLabel("Refreshing…");
+      await load({ quiet: true });
+      setMsg(
+        action === "reject"
+          ? `${name} marked not hired and deactivated.`
+          : action === "approve"
+            ? `${name} hired into the org.`
+            : action === "allowRetake"
+              ? `${name} may retake the final quiz (cycle ${data.newCycle ?? ""}).`
+              : action === "approveCertificate"
+                ? `Certificate approved for ${name}.`
+                : data.fromDay != null
+                  ? `Added ${data.added ?? days} day(s) for ${name} (Days ${data.fromDay}–${data.toDay}).`
+                  : `Added ${days} day(s) for ${name}.`
+      );
+    } finally {
+      setBusyId(null);
+      setBusyLabel("");
+    }
   }
 
-  if (loading) {
-    return <p className="text-sm text-slate-400">Loading evaluation board…</p>;
+  if (loading && rows.length === 0) {
+    return (
+      <section className={`${panelShell} p-6`}>
+        <SectionLoader message="Loading hire decisions…" />
+      </section>
+    );
   }
-  if (error) return <p className="text-sm text-amber-300">{error}</p>;
+  if (error && rows.length === 0) {
+    return (
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+        {error}
+      </p>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold">Evaluation review</h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          After day-wise training, review schedule completion, HRMS practice-work quality/hours, and
-          the one-attempt final quiz together.
-          {canDecide
-            ? " Admin may reject, add +1 week, or approve (≥90% quiz required to approve)."
-            : " Team Lead: view only — Admin makes the hire decision."}
+    <section className={panelShell}>
+      <div className="border-b border-slate-200 px-5 py-4 sm:px-6 dark:border-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Hire decisions</h2>
+        <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+          When training is complete, choose <strong className="font-medium">Hire</strong> (quiz ≥
+          90%) or <strong className="font-medium">Do not hire</strong>. Use Add days or Allow
+          retake when someone needs more time or another quiz attempt. Certificate approval is
+          separate from hiring.
         </p>
       </div>
 
-      {msg && (
-        <p className="rounded-xl bg-blue-500/10 px-3 py-2 text-sm text-blue-200">{msg}</p>
-      )}
+      <div className="space-y-3 p-4 sm:p-5">
+        {busyLabel && <WorkingBanner message={busyLabel} />}
+        {msg && !busyLabel && (
+          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+            {msg}
+          </p>
+        )}
 
-      {rows.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No trainees awaiting evaluation yet. They appear when the schedule is complete.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-700">
-          <table className="w-full min-w-[920px] text-left text-sm">
-            <thead className="bg-slate-900/80 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2 font-medium">Trainee</th>
-                <th className="px-3 py-2 font-medium">Final quiz</th>
-                <th className="px-3 py-2 font-medium">Band</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                {canDecide && <th className="px-3 py-2 font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const tone = r.band?.tone ?? "muted";
-                const decided =
-                  r.trainingStatus === "REJECTED" ||
-                  r.trainingStatus === "APPROVED_IN_ORG" ||
-                  r.readyForProduction;
-                return (
-                  <tr
-                    key={r.id}
-                    className={`border-t border-slate-800 ${bandRowClass(tone)}`}
-                  >
-                    <td className="px-3 py-2.5">
-                      <p className="font-medium text-slate-100">{r.name}</p>
-                      <p className="text-xs text-slate-500">{r.email}</p>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {r.finalQuizScore != null ? (
+        {rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-600 dark:text-slate-500">
+            No trainees ready for a hire decision yet.
+          </p>
+        ) : (
+          <div
+            className={`min-w-0 space-y-3 ${busyId ? "pointer-events-none opacity-70" : ""}`}
+          >
+            {rows.map((r) => {
+              const decided =
+                r.trainingStatus === "REJECTED" ||
+                r.trainingStatus === "APPROVED_IN_ORG" ||
+                r.readyForProduction;
+              const work = r.workSummary;
+              const quiz = r.finalQuizScore;
+              const prevScores = formatPrevScores(r.previousQuizAttempts);
+              const rowBusy = busyId === r.id;
+              const canAllowRetake = quiz != null && !r.quizRetakePending && !decided;
+              const certPending =
+                r.finalQuizCertificateStatus === "PENDING_REVIEW" && quiz != null;
+              const canHire = quiz != null && quiz >= 90;
+              const showExtend =
+                !decided &&
+                (r.band?.band === "ATTENTION" ||
+                  r.band?.band === "REJECT" ||
+                  (quiz != null && quiz < 90) ||
+                  (r.scheduleComplete && quiz == null));
+
+              return (
+                <article
+                  key={r.id}
+                  className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-950/30"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {rowBusy && (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
+                        )}
+                        <h3 className="font-semibold text-slate-900 dark:text-white">{r.name}</h3>
                         <span
-                          className={
-                            tone === "red"
-                              ? "text-lg font-semibold text-red-300"
-                              : tone === "emerald"
-                                ? "text-lg font-semibold text-emerald-300"
-                                : "text-lg font-semibold text-amber-200"
-                          }
+                          className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass(r)}`}
                         >
-                          {r.finalQuizScore}%
+                          {statusLabel(r)}
                         </span>
-                      ) : (
-                        <span className="text-slate-500">Not taken</span>
-                      )}
-                      {r.finalQuizAttemptedAt && (
-                        <p className="text-[11px] text-slate-500">
-                          {new Date(r.finalQuizAttemptedAt).toLocaleString()}
+                      </div>
+                      <p className="text-xs text-slate-500">{r.email}</p>
+                      <div className="mt-3 grid grid-cols-3 gap-3 sm:max-w-md">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase text-slate-500">
+                            Production
+                          </p>
+                          <p className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
+                            {work?.productionUnits != null ? work.productionUnits : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase text-slate-500">
+                            Quality
+                          </p>
+                          <p className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
+                            {work?.qualityScore != null ? `${work.qualityScore}%` : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase text-slate-500">Quiz</p>
+                          <p className={`text-sm font-semibold tabular-nums ${quizScoreClass(quiz)}`}>
+                            {quiz == null
+                              ? r.quizRetakePending
+                                ? "Retake open"
+                                : "—"
+                              : `${Math.round(quiz)}%`}
+                          </p>
+                          {prevScores && (
+                            <p className="text-[10px] tabular-nums text-slate-500">
+                              Prev {prevScores}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-500">
+                        {certPending && (
+                          <span className="text-amber-800 dark:text-amber-300">Cert pending review</span>
+                        )}
+                        {r.finalQuizCertificateStatus === "APPROVED" && quiz != null && (
+                          <span className="text-emerald-800 dark:text-emerald-400">
+                            Certificate approved
+                          </span>
+                        )}
+                        {r.quizRetakePending && r.quizRetakeGrantedBy && (
+                          <span className="text-violet-800 dark:text-violet-300">
+                            Retake by {r.quizRetakeGrantedBy.name} (
+                            {formatRole(r.quizRetakeGrantedBy.role)})
+                          </span>
+                        )}
+                        {r.band?.label && (
+                          <span>{r.band.label}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 lg:min-w-[220px]">
+                      {decided ? (
+                        <p className="text-sm text-slate-600 dark:text-slate-500">
+                          Decision recorded — no further actions.
                         </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={`inline-flex rounded-md border px-2 py-0.5 text-xs ${bandBadgeClass(tone)}`}
-                      >
-                        {r.band?.label ?? "Pending"}
-                      </span>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        {r.band?.description}
-                      </p>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-slate-400">
-                      {r.trainingStatus === "APPROVED_IN_ORG" || r.readyForProduction
-                        ? "Approved in org"
-                        : r.trainingStatus === "REJECTED"
-                          ? "Rejected"
-                          : r.scheduleComplete
-                            ? "Awaiting decision"
-                            : r.trainingStatus || "—"}
-                    </td>
-                    {canDecide && (
-                      <td className="px-3 py-2.5">
-                        {!decided && (
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            Decision
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              disabled={busyId === r.id}
-                              onClick={() => decide(r.id, r.name, "reject")}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-800/60 bg-red-950/40 px-2 py-1 text-xs text-red-200 hover:bg-red-900/50 disabled:opacity-50"
+                              disabled={!!busyId || !canHire}
+                              title={
+                                canHire
+                                  ? "Hire into the organization"
+                                  : "Requires final quiz score ≥ 90%"
+                              }
+                              onClick={() => decide(r.id, r.name, "approve")}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-45"
                             >
-                              <XCircle className="h-3 w-3" />
-                              Reject
+                              <UserCheck className="h-3.5 w-3.5" />
+                              Hire
                             </button>
-                            {(r.band?.band === "ATTENTION" ||
-                              r.band?.band === "REJECT" ||
-                              (r.finalQuizScore != null && r.finalQuizScore < 90) ||
-                              (r.scheduleComplete && r.finalQuizScore == null)) && (
+                            <button
+                              type="button"
+                              disabled={!!busyId}
+                              onClick={() => decide(r.id, r.name, "reject")}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-900/40"
+                            >
+                              <UserX className="h-3.5 w-3.5" />
+                              Do not hire
+                            </button>
+                          </div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 pt-1">
+                            Other
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {showExtend && (
                               <button
                                 type="button"
-                                disabled={busyId === r.id}
+                                disabled={!!busyId}
                                 onClick={() => decide(r.id, r.name, "extendWeek")}
-                                className="inline-flex items-center gap-1 rounded-lg border border-amber-700/60 bg-amber-950/40 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/50 disabled:opacity-50"
+                                className={btnSecondary}
                               >
                                 <CalendarPlus className="h-3 w-3" />
-                                +1 week
+                                Add days
                               </button>
                             )}
-                            {r.finalQuizScore != null && r.finalQuizScore >= 90 && (
+                            {canAllowRetake && (
                               <button
                                 type="button"
-                                disabled={busyId === r.id}
-                                onClick={() => decide(r.id, r.name, "approve")}
-                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                                disabled={!!busyId}
+                                onClick={() => decide(r.id, r.name, "allowRetake")}
+                                className={btnSecondary}
                               >
-                                <CheckCircle2 className="h-3 w-3" />
-                                Approve to org
+                                <RotateCcw className="h-3 w-3" />
+                                Allow retake
+                              </button>
+                            )}
+                            {certPending && (
+                              <button
+                                type="button"
+                                disabled={!!busyId}
+                                onClick={() => decide(r.id, r.name, "approveCertificate")}
+                                className={btnSecondary}
+                              >
+                                Approve cert
                               </button>
                             )}
                           </div>
-                        )}
-                        {decided && (
-                          <span className="text-[11px] text-slate-600">Decision recorded</span>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

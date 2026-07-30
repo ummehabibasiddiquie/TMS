@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatDisplayDateTime } from "@/lib/format-date";
 import { Activity, Database } from "lucide-react";
-
 type TrackerPayload = {
   trainee?: {
     readyForProduction: boolean;
@@ -120,7 +120,7 @@ export function TrackerProgressPanel({ userId, forceShow, compact }: Props) {
           </div>
           {t.lastActivityAt && (
             <p className="sm:col-span-4 text-xs text-slate-500">
-              Last activity: {new Date(t.lastActivityAt).toLocaleString()}
+              Last activity: {formatDisplayDateTime(t.lastActivityAt)}
             </p>
           )}
           {t.message && (

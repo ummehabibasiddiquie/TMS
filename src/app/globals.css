@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+.dark {
   --bg-primary: #0b0f1a;
   --bg-secondary: #111827;
   --bg-card: #1a2234;
@@ -13,6 +14,21 @@
   --text-primary: #f1f5f9;
   --text-muted: #94a3b8;
   --border: #1e293b;
+  color-scheme: dark;
+}
+
+.light {
+  --bg-primary: #f1f5f9;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --accent: #1e3a8a;
+  --accent-glow: #1d4ed8;
+  --success: #047857;
+  --warning: #b45309;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  color-scheme: light;
 }
 
 body {
@@ -20,15 +36,23 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 @layer utilities {
   .glass-panel {
     @apply rounded-2xl backdrop-blur-xl;
     border: 1px solid var(--border);
-    background-color: rgba(26, 34, 52, 0.8);
+    background-color: color-mix(in srgb, var(--bg-card) 85%, transparent);
   }
   .gradient-text {
     @apply bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent;
   }
+}
+
+.light .gradient-text {
+  background-image: linear-gradient(to right, #1e40af, #334155);
 }
 
 ::-webkit-scrollbar {
@@ -36,6 +60,291 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #94a3b8;
   border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+/*
+ * Light-mode remaps for the existing dark-first slate utility classes.
+ * Keeps the UI readable without rewriting every component.
+ */
+.light .bg-slate-950,
+.light .bg-slate-950\/95,
+.light .bg-slate-950\/90,
+.light .bg-slate-950\/70,
+.light .bg-slate-950\/60,
+.light .bg-slate-950\/50,
+.light .bg-slate-950\/40,
+.light .bg-slate-950\/30 {
+  background-color: rgb(248 250 252) !important;
+}
+.light .bg-slate-900,
+.light .bg-slate-900\/80,
+.light .bg-slate-900\/70,
+.light .bg-slate-900\/60,
+.light .bg-slate-900\/50,
+.light .bg-slate-900\/40,
+.light .bg-slate-900\/30 {
+  background-color: rgb(255 255 255) !important;
+}
+.light .bg-slate-800,
+.light .bg-slate-800\/70,
+.light .bg-slate-800\/60,
+.light .bg-slate-800\/50,
+.light .bg-slate-800\/40 {
+  background-color: rgb(241 245 249) !important;
+}
+.light .border-slate-800,
+.light .border-slate-800\/60,
+.light .border-slate-800\/50,
+.light .border-slate-700,
+.light .border-slate-700\/80,
+.light .border-slate-700\/60,
+.light .border-slate-700\/50 {
+  border-color: rgb(226 232 240) !important;
+}
+.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(226 232 240) !important;
+}
+.light .text-white {
+  color: rgb(15 23 42) !important;
+}
+.light .text-slate-100,
+.light .text-slate-200 {
+  color: rgb(30 41 59) !important;
+}
+.light .text-slate-300 {
+  color: rgb(51 65 85) !important;
+}
+.light .text-slate-400 {
+  color: rgb(71 85 105) !important;
+}
+.light .text-slate-500,
+.light .text-slate-600 {
+  color: rgb(100 116 139) !important;
+}
+.light .hover\:bg-slate-800:hover,
+.light .hover\:bg-slate-800\/70:hover {
+  background-color: rgb(226 232 240) !important;
+}
+.light .hover\:text-white:hover {
+  color: rgb(15 23 42) !important;
+}
+.light .bg-amber-950\/20,
+.light .bg-amber-950\/30,
+.light .bg-amber-950\/40 {
+  background-color: rgb(255 251 235) !important;
+}
+.light .bg-blue-950\/20,
+.light .bg-blue-950\/25,
+.light .bg-blue-950\/30 {
+  background-color: rgb(239 246 255) !important;
+}
+.light .bg-emerald-900\/40,
+.light .bg-emerald-500\/20,
+.light .bg-emerald-500\/15,
+.light .bg-emerald-500\/10 {
+  background-color: rgb(236 253 245) !important;
+}
+.light .bg-red-950\/50,
+.light .bg-red-500\/20 {
+  background-color: rgb(254 242 242) !important;
+}
+.light .shadow-blue-950\/30 {
+  --tw-shadow-color: rgb(30 58 138 / 0.18) !important;
+}
+
+/* Soften bright primary blues on light backgrounds */
+.light .bg-blue-600 {
+  background-color: rgb(30 58 138) !important; /* #1e3a8a */
+  color: rgb(255 255 255) !important;
+}
+.light .bg-blue-500,
+.light .hover\:bg-blue-500:hover {
+  background-color: rgb(29 78 216) !important; /* #1d4ed8 */
+  color: rgb(255 255 255) !important;
+}
+.light .hover\:bg-blue-600:hover {
+  background-color: rgb(30 64 175) !important; /* #1e40af */
+  color: rgb(255 255 255) !important;
+}
+.light .bg-blue-600\/20,
+.light .bg-blue-500\/20 {
+  background-color: rgb(239 246 255) !important;
+  color: inherit;
+}
+.light .shadow-lg.shadow-blue-950\/30,
+.light .shadow-blue-600\/30 {
+  --tw-shadow-color: rgb(30 58 138 / 0.2) !important;
+}
+
+/* Keep white labels on colored primary / status buttons (incl. icons via currentColor) */
+.light .bg-blue-600,
+.light .bg-blue-500,
+.light .bg-blue-600.text-white,
+.light .bg-blue-500.text-white,
+.light .bg-blue-600 .text-white,
+.light .bg-blue-500 .text-white,
+.light .bg-blue-600 svg,
+.light .bg-blue-500 svg,
+.light .hover\:bg-blue-500:hover,
+.light .hover\:bg-blue-600:hover {
+  color: rgb(255 255 255) !important;
+}
+.light .bg-emerald-600,
+.light .bg-emerald-500,
+.light .bg-green-600,
+.light .bg-green-500,
+.light .bg-red-600,
+.light .bg-red-500,
+.light .bg-amber-600,
+.light .bg-amber-500,
+.light .bg-indigo-600,
+.light .bg-indigo-500 {
+  color: rgb(255 255 255) !important;
+}
+.light .bg-emerald-600.text-white,
+.light .bg-emerald-500.text-white,
+.light .bg-green-600.text-white,
+.light .bg-green-500.text-white,
+.light .bg-red-600.text-white,
+.light .bg-red-500.text-white,
+.light .bg-amber-600.text-white,
+.light .bg-amber-500.text-white,
+.light .bg-indigo-600.text-white,
+.light .bg-indigo-500.text-white {
+  color: rgb(255 255 255) !important;
+}
+.light .bg-violet-700,
+.light .bg-violet-600,
+.light .bg-purple-700,
+.light .bg-purple-600,
+.light .bg-violet-700.text-white,
+.light .bg-violet-600.text-white,
+.light .bg-purple-700.text-white,
+.light .bg-purple-600.text-white,
+.light label.bg-violet-700,
+.light label.bg-violet-700.text-white {
+  color: rgb(255 255 255) !important;
+}
+.light .hover\:bg-violet-600:hover,
+.light .hover\:bg-purple-600:hover {
+  color: rgb(255 255 255) !important;
+}
+
+/* Soften bright text accents for light readability */
+.light .text-blue-300,
+.light .text-blue-400 {
+  color: rgb(30 64 175) !important; /* #1e40af */
+}
+.light .text-blue-500 {
+  color: rgb(29 78 216) !important;
+}
+.light .hover\:text-blue-200:hover,
+.light .hover\:text-blue-300:hover {
+  color: rgb(30 58 138) !important;
+}
+.light .text-cyan-300,
+.light .text-cyan-400 {
+  color: rgb(14 116 144) !important;
+}
+.light .text-emerald-100,
+.light .text-emerald-200,
+.light .text-emerald-300,
+.light .text-emerald-400 {
+  color: rgb(4 120 87) !important;
+}
+.light .hover\:text-emerald-300:hover {
+  color: rgb(6 95 70) !important;
+}
+.light .border-emerald-500\/40,
+.light .border-emerald-500\/30,
+.light .border-emerald-400 {
+  border-color: rgb(167 243 208) !important;
+}
+.light .text-amber-100,
+.light .text-amber-200,
+.light .text-amber-300,
+.light .text-amber-400 {
+  color: rgb(180 83 9) !important;
+}
+.light .hover\:text-amber-300:hover {
+  color: rgb(146 64 14) !important;
+}
+.light .bg-amber-600,
+.light .bg-amber-500,
+.light .hover\:bg-amber-500:hover {
+  color: rgb(255 255 255) !important;
+}
+.light .bg-amber-600 {
+  background-color: rgb(217 119 6) !important;
+}
+.light .bg-amber-500,
+.light .hover\:bg-amber-500:hover {
+  background-color: rgb(245 158 11) !important;
+}
+.light .bg-amber-950\/30,
+.light .bg-amber-900\/40 {
+  background-color: rgb(255 247 237) !important;
+}
+.light .border-amber-800\/50 {
+  border-color: rgb(253 186 116) !important;
+}
+.light .text-red-400 {
+  color: rgb(185 28 28) !important;
+}
+.light .hover\:text-red-300:hover {
+  color: rgb(153 27 27) !important;
+}
+.light .border-blue-500,
+.light .border-blue-400 {
+  border-color: rgb(30 64 175) !important;
+}
+.light .ring-blue-500,
+.light .ring-blue-400,
+.light .focus\:ring-blue-500:focus,
+.light .focus\:ring-blue-400:focus {
+  --tw-ring-color: rgb(30 64 175 / 0.45) !important;
+}
+
+/* Due / late status chips (trainee overview, progress) */
+.light .bg-orange-500\/15,
+.light .bg-orange-500\/10 {
+  background-color: rgb(255 237 213) !important;
+}
+.light .border-orange-500\/40 {
+  border-color: rgb(234 88 12) !important;
+}
+.light .text-orange-200,
+.light .text-orange-300 {
+  color: rgb(154 52 18) !important;
+}
+.light .text-orange-800,
+.light .text-orange-900,
+.light .text-orange-950 {
+  color: rgb(124 45 18) !important;
+}
+.light .bg-amber-500\/10,
+.light .bg-amber-500\/15 {
+  background-color: rgb(254 243 199) !important;
+}
+.light .border-amber-500\/40 {
+  border-color: rgb(217 119 6) !important;
+}
+.light .bg-red-500\/10,
+.light .bg-red-500\/15 {
+  background-color: rgb(254 226 226) !important;
+}
+.light .border-red-500\/40 {
+  border-color: rgb(220 38 38) !important;
+}
+.light .text-red-200,
+.light .text-red-300 {
+  color: rgb(185 28 28) !important;
+}
+.light .ring-blue-500\/50 {
+  --tw-ring-color: rgb(37 99 235 / 0.55) !important;
 }

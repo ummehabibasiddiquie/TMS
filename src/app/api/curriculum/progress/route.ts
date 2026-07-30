@@ -10,8 +10,8 @@ import { getTraineeEvaluationScore } from "@/lib/final-evaluation";
 import {
   collectPracticeProjectsFromDays,
   hasPracticeWorkOnSchedule,
-  listHrmsWorkForTraineeProjects,
 } from "@/lib/hrms-work";
+import { listTraineeWorkMetrics } from "@/lib/trainee-work";
 
 function resolvePhase(args: {
   readyForProduction: boolean;
@@ -33,7 +33,7 @@ function resolvePhase(args: {
 }
 
 /**
- * Admin/TL: day-wise progress + HRMS work (practice projects) + final evaluation.
+ * Admin/TL: day-wise progress + manual work metrics + final evaluation.
  */
 export async function GET(req: Request) {
   const user = await requireSession(["ADMIN", "TRAINER"]);
@@ -71,12 +71,16 @@ export async function GET(req: Request) {
       resolveCurriculumScope(userId),
     ]);
     const days = await listCurriculumDays(scope.scopeKey);
-    const practiceProjects = collectPracticeProjectsFromDays(days);
-    const hasPractice = hasPracticeWorkOnSchedule(days);
-    const work = await listHrmsWorkForTraineeProjects(
-      { email: trainee.email, employeeId: trainee.employeeId, name: trainee.name },
-      practiceProjects
-    );
+    const throughDay = plan.currentDay;
+    const practiceProjects = collectPracticeProjectsFromDays(days, {
+      throughDayNumber: throughDay,
+    });
+    const hasPractice = hasPracticeWorkOnSchedule(days, {
+      throughDayNumber: throughDay,
+    });
+    const work = await listTraineeWorkMetrics(userId, {
+      throughDayNumber: throughDay,
+    });
     const currentPhase = resolvePhase({
       readyForProduction: plan.readyForProduction,
       trainingStatus: plan.trainingStatus,
@@ -95,8 +99,9 @@ export async function GET(req: Request) {
       workMeta: {
         configured: work.configured,
         connected: work.connected,
-        hrmsUserId: work.hrmsUserId,
+        hrmsUserId: null,
         message: work.message,
+        source: "manual",
       },
     });
   }
@@ -136,12 +141,16 @@ export async function GET(req: Request) {
         resolveCurriculumScope(t.id),
       ]);
       const days = await listCurriculumDays(scope.scopeKey);
-      const practiceProjects = collectPracticeProjectsFromDays(days);
-      const hasPractice = hasPracticeWorkOnSchedule(days);
-      const work = await listHrmsWorkForTraineeProjects(
-        { email: t.email, employeeId: t.employeeId, name: t.name },
-        practiceProjects
-      );
+      const throughDay = plan.currentDay;
+      const practiceProjects = collectPracticeProjectsFromDays(days, {
+        throughDayNumber: throughDay,
+      });
+      const hasPractice = hasPracticeWorkOnSchedule(days, {
+        throughDayNumber: throughDay,
+      });
+      const work = await listTraineeWorkMetrics(t.id, {
+        throughDayNumber: throughDay,
+      });
 
       const score = evaluation.score;
       const canExtendWeek =
@@ -176,8 +185,15 @@ export async function GET(req: Request) {
         isCustom: customCount > 0,
         scheduleSource: plan.isCustom ? "custom" : "default",
         finalQuizScore: evaluation.score,
+        lastFinalQuizScore: evaluation.lastFinalQuizScore,
         finalQuizAttemptedAt: evaluation.attemptedAt,
         evaluationCycle: evaluation.cycle,
+        previousQuizAttempts: evaluation.previousAttempts,
+        quizRetakePending: evaluation.retakePending,
+        quizRetakeGrantedAt: evaluation.retakeGrantedAt,
+        quizRetakeGrantedBy: evaluation.retakeGrantedBy,
+        finalQuizCertificateStatus: evaluation.certificateStatus,
+        finalQuizCertificateReviewedBy: evaluation.certificateReviewedBy,
         band: evaluation.band,
         currentPhase,
         hasPracticeWork: hasPractice,
@@ -188,7 +204,27 @@ export async function GET(req: Request) {
           configured: work.configured,
           connected: work.connected,
           message: work.message,
+          source: "manual",
         },
+        forcedDay: plan.forcedDay ?? null,
+        autoDay: plan.autoDay ?? null,
+        trainingStart: plan.trainingStart,
+        dueSummary: plan.dueSummary,
+        days: plan.allDays.map((d) => ({
+          dayNumber: d.dayNumber,
+          title: d.title,
+          done: d.done,
+          percent: d.percent,
+          completedAt: d.completedAt,
+          due: d.due,
+          projectName: d.projectName ?? null,
+          hrmsProjectId: d.hrmsProjectId ?? null,
+          dayType: d.dayType,
+          hasTrainingWork:
+            Boolean(d.hrmsProjectId?.trim()) ||
+            (d.workItems?.length ?? 0) > 0 ||
+            (Boolean(d.projectName?.trim()) && d.dayType !== "CHECKLIST"),
+        })),
       };
     })
   );

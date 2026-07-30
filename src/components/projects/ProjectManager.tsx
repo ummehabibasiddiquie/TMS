@@ -196,30 +196,39 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
     }
   }
 
+  const panelCard =
+    "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none";
+  const fieldClass =
+    "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:shadow-none";
+  const modalFieldClass =
+    "mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200";
+
   return (
-    <div className="w-full space-y-8">
+    <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Manage Projects</p>
-        <h1 className="mt-3 text-3xl font-bold text-white">Create and manage projects</h1>
-        <p className="mt-2 text-slate-400">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-800 dark:text-blue-300">
+          Admin — Manage Projects
+        </p>
+        <h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">Create and manage projects</h1>
+        <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-400">
           Projects can be referenced on day-wise curriculum days. Training work is scheduled there —
           no separate employee assign needed.
         </p>
       </div>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+      <div className={panelCard}>
         <div className="mb-4 flex flex-col gap-3 md:flex-row">
           <div className="flex flex-1 gap-3">
             <input
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 flex-1"
+              className={`flex-1 ${fieldClass}`}
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+              className={fieldClass}
             >
               <option>All Status</option>
               <option>Active</option>
@@ -231,7 +240,7 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
           <div className="flex gap-2">
             <button
               onClick={clearFilters}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:shadow-none dark:hover:bg-slate-800"
             >
               Clear Filters
             </button>
@@ -245,55 +254,62 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
         </div>
         {filteredProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <FolderKanban className="h-12 w-12 text-slate-600 mb-4" />
-            <p className="text-slate-400">No projects found</p>
-            <p className="text-sm text-slate-500 mt-1">Try adjusting your filters or create your first project</p>
+            <FolderKanban className="mb-4 h-12 w-12 text-slate-400 dark:text-slate-600" />
+            <p className="text-slate-600 dark:text-slate-400">No projects found</p>
+            <p className="mt-1 text-sm text-slate-500">Try adjusting your filters or create your first project</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
             <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="text-slate-500">
-                <tr className="border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-600 dark:bg-slate-950/50 dark:text-slate-500">
+                <tr className="border-b border-slate-200 dark:border-slate-800">
                   {["Project", "Active", "Status", "Priority", ""].map((header) => (
-                    <th key={header || "actions"} className="py-3 font-medium">{header}</th>
+                    <th key={header || "actions"} className="px-3 py-3 font-semibold">
+                      {header}
+                    </th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/70">
                 {filteredProjects.map((project) => (
-                  <tr key={project.id} className="border-b border-slate-800/70 text-slate-300">
-                    <td className="py-3 font-medium text-white">{project.name}</td>
-                    <td className="py-3">
+                  <tr
+                    key={project.id}
+                    className="text-slate-700 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/30"
+                  >
+                    <td className="px-3 py-3 font-medium text-slate-900 dark:text-white">{project.name}</td>
+                    <td className="px-3 py-3">
                       <span
-                        className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium border ${
+                        className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${
                           project.active
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-slate-800 text-slate-400 border-slate-700"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                            : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
                         }`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
-                          project.active ? "bg-emerald-400" : "bg-slate-400"
-                        }`} />
+                        <span
+                          className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
+                            project.active ? "bg-emerald-600 dark:bg-emerald-400" : "bg-slate-500"
+                          }`}
+                        />
                         {project.active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="py-3">
+                    <td className="px-3 py-3">
                       <span
-                        className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium border ${
+                        className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${
                           project.status === "ACTIVE"
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
                             : project.status === "COMPLETED"
-                            ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                            : project.status === "ON_HOLD"
-                            ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-                            : "bg-slate-800 text-slate-400 border-slate-700"
+                              ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400"
+                              : project.status === "ON_HOLD"
+                                ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-400"
+                                : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
                         }`}
                       >
                         {project.status}
                       </span>
                     </td>
-                    <td className="py-3">{project.priority}</td>
-                    <td className="py-3">
+                    <td className="px-3 py-3">{project.priority}</td>
+                    <td className="px-3 py-3">
                       <div className="flex gap-1">
                         <ActionButton
                           icon={Pencil}
@@ -315,42 +331,49 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
             </table>
           </div>
         )}
-        <p className="mt-4 text-sm text-slate-500">Showing {filteredProjects.length} of {projects.length} projects</p>
+        <p className="mt-4 text-sm text-slate-600 dark:text-slate-500">
+          Showing {filteredProjects.length} of {projects.length} projects
+        </p>
       </div>
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-slate-900 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">{modal === "create" ? "Create Project" : "Edit Project"}</h2>
-              <button onClick={() => setModal(null)} className="text-slate-400 hover:text-white">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                {modal === "create" ? "Create Project" : "Edit Project"}
+              </h2>
+              <button
+                onClick={() => setModal(null)}
+                className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {error && <p className="mb-3 text-sm text-red-300">{error}</p>}
+            {error && <p className="mb-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
 
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[60vh] space-y-4 overflow-y-auto">
               <div>
-                <label className="text-sm text-slate-400">Project Name *</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Project Name *</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                  className={modalFieldClass}
                 />
               </div>
               <div>
-                <label className="text-sm text-slate-400">Description</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Description</label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                  className={modalFieldClass}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-slate-400">Status</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Status</label>
                   <select
                     value={form.status}
                     onChange={(e) => {
@@ -361,7 +384,7 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
                         active: nextStatus === "ACTIVE",
                       });
                     }}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                    className={modalFieldClass}
                   >
                     <option value="ACTIVE">Active</option>
                     <option value="INACTIVE">Inactive</option>
@@ -373,31 +396,31 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-slate-400">Start Date</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Start Date</label>
                   <input
                     type="date"
                     value={form.startDate}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                    className={modalFieldClass}
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-slate-400">End Date</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-400">End Date</label>
                   <input
                     type="date"
                     value={form.endDate}
                     onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                    className={modalFieldClass}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-slate-400">Priority</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Priority</label>
                   <select
                     value={form.priority}
                     onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                    className={modalFieldClass}
                   >
                     <option value="LOW">Low</option>
                     <option value="MEDIUM">Medium</option>
@@ -406,11 +429,11 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-slate-400">Active</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Active</label>
                   <select
                     value={form.active.toString()}
                     onChange={(e) => setForm({ ...form, active: e.target.value === "true" })}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                    className={modalFieldClass}
                   >
                     <option value="true">Yes</option>
                     <option value="false">No</option>
@@ -418,31 +441,31 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
                 </div>
               </div>
               <div>
-                <label className="text-sm text-slate-400">Resources</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Resources</label>
                 <textarea
                   value={form.resources}
                   onChange={(e) => setForm({ ...form, resources: e.target.value })}
                   rows={2}
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                  className={modalFieldClass}
                   placeholder="List resources, tools, or materials..."
                 />
               </div>
               <div>
-                <label className="text-sm text-slate-400">Documentation</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Documentation</label>
                 <textarea
                   value={form.documentation}
                   onChange={(e) => setForm({ ...form, documentation: e.target.value })}
                   rows={2}
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                  className={modalFieldClass}
                   placeholder="Documentation links or notes..."
                 />
               </div>
               <div>
-                <label className="text-sm text-slate-400">Reference URL</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-400">Reference URL</label>
                 <input
                   value={form.url}
                   onChange={(e) => setForm({ ...form, url: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2"
+                  className={modalFieldClass}
                   placeholder="https://..."
                 />
               </div>
@@ -452,13 +475,13 @@ export function ProjectManager({ projects: initial, user }: { projects: Project[
               <button
                 onClick={save}
                 disabled={loading}
-                className="flex-1 rounded-xl bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500 disabled:opacity-50"
               >
                 {loading ? "Saving..." : modal === "create" ? "Create Project" : "Update Project"}
               </button>
               <button
                 onClick={() => setModal(null)}
-                className="rounded-xl border border-slate-700 px-4 py-2 hover:bg-slate-800"
+                className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>

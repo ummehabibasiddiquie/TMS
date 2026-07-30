@@ -3,16 +3,24 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Award, FolderKanban, Calendar, Trophy, Download, Eye, Clock } from "lucide-react";
+import { Award, FolderKanban, Calendar, Trophy, Download, Eye, Clock, XCircle } from "lucide-react";
+import { formatDisplayDate } from "@/lib/format-date";
+import { formatCertActionBy } from "@/lib/cert-reviewer";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   CertificateModal,
   type CertificateData,
 } from "@/components/certifications/CertificateDocument";
 import { printCertificate } from "@/lib/print-certificate";
+import {
+  DEFAULT_CERTIFICATE_BRAND,
+  type CertificateBrandSettings,
+} from "@/lib/certificate-brand";
 import type { Role } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+type CertReviewer = { id: string; name: string; role: string };
 
 type Project = {
   id: string;
@@ -27,6 +35,8 @@ type Project = {
     status?: string;
     certifiedAt: string | Date;
     score: number;
+    reviewNote?: string | null;
+    reviewedBy?: CertReviewer | null;
   }[];
 };
 
@@ -50,6 +60,8 @@ type FinalQuizCert = {
   cycle: number;
   status: string;
   certifiedAt: string | Date;
+  reviewNote?: string | null;
+  reviewedBy?: CertReviewer | null;
 };
 
 export default function CertificationsPage() {
@@ -57,8 +69,13 @@ export default function CertificationsPage() {
   const [user, setUser] = useState<{ name: string; role: Role; email: string } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [finalQuizCerts, setFinalQuizCerts] = useState<FinalQuizCert[]>([]);
+  const [pendingFinalQuiz, setPendingFinalQuiz] = useState<FinalQuizCert | null>(null);
+  const [rejectedFinalQuiz, setRejectedFinalQuiz] = useState<FinalQuizCert | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCert, setActiveCert] = useState<CertificateData | null>(null);
+  const [brand, setBrand] = useState<CertificateBrandSettings>(
+    DEFAULT_CERTIFICATE_BRAND
+  );
 
   useEffect(() => {
     fetchUser();
@@ -84,12 +101,19 @@ export default function CertificationsPage() {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch("/api/certifications");
-      const data = await res.json();
-      if (res.ok) {
+      const [certRes, brandRes] = await Promise.all([
+        fetch("/api/certifications"),
+        fetch("/api/certificate-brand"),
+      ]);
+      const data = await certRes.json();
+      if (certRes.ok) {
         setProjects(data.projects || []);
         setFinalQuizCerts(data.finalQuizCertificates || []);
+        setPendingFinalQuiz(data.pendingFinalQuizCertificate || null);
+        setRejectedFinalQuiz(data.rejectedFinalQuizCertificate || null);
       }
+      const brandData = await brandRes.json();
+      if (brandRes.ok && brandData.brand) setBrand(brandData.brand);
     } catch (error) {
       console.error("Error fetching projects:", error);
     }
@@ -109,9 +133,10 @@ export default function CertificationsPage() {
 
   const certifiedProjects = projects.filter((p) => certStatus(p) === "APPROVED");
   const pendingReviewProjects = projects.filter((p) => certStatus(p) === "PENDING_REVIEW");
+  const rejectedProjects = projects.filter((p) => certStatus(p) === "REJECTED");
   const inProgressProjects = projects.filter((p) => {
     const s = certStatus(p);
-    return s === "NONE" || s === "FAILED" || s === "REJECTED";
+    return s === "NONE" || s === "FAILED";
   });
   const approvedFinalQuiz = finalQuizCerts.filter((c) => c.status === "APPROVED");
 
@@ -149,7 +174,7 @@ export default function CertificationsPage() {
 
   function downloadCertificate(project: Project) {
     const data = toCertData(project);
-    if (data) printCertificate(data);
+    if (data) printCertificate(data, brand);
   }
 
   return (
@@ -161,19 +186,24 @@ export default function CertificationsPage() {
           </p>
           <h1 className="mt-2 text-3xl font-bold text-white">Certifications</h1>
           <p className="mt-2 max-w-xl text-slate-400">
-            Your Final Quiz certificate is issued when you complete the quiz. Project certificates
-            need Admin / Team Lead approval before view or download.
+            Final Quiz certificate appears after Admin or Team Lead approval. Project certificates
+            need Admin or Team Lead approval before view or download.
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-5">
           {[
             {
               icon: Trophy,
               label: "Certified",
               value: certifiedProjects.length + approvedFinalQuiz.length,
             },
-            { icon: Clock, label: "Pending review", value: pendingReviewProjects.length },
+            { icon: Clock, label: "Pending review", value: pendingReviewProjects.length + (pendingFinalQuiz ? 1 : 0) },
+            {
+              icon: XCircle,
+              label: "Not approved",
+              value: rejectedProjects.length + (rejectedFinalQuiz ? 1 : 0),
+            },
             { icon: FolderKanban, label: "Not yet certified", value: inProgressProjects.length },
             { icon: Award, label: "Assigned projects", value: projects.length },
           ].map((stat) => (
@@ -191,6 +221,71 @@ export default function CertificationsPage() {
             </div>
           ))}
         </div>
+
+        {pendingFinalQuiz && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Pending review</h3>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+              <div className="flex gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-amber-600/80 text-white">
+                  <Clock className="h-7 w-7" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-semibold text-white">
+                    {pendingFinalQuiz.quizTitle || "Final Quiz"}
+                  </h2>
+                  <p className="text-sm text-slate-400">Final Quiz evaluation</p>
+                  <p className="mt-2 text-sm text-amber-100">
+                    Quiz score: {Math.round(pendingFinalQuiz.score)}%. Approval is pending from
+                    Admin or Team Lead. You cannot view or download the certificate until it is approved.
+                  </p>
+                  <span className="mt-3 inline-block rounded-md bg-amber-500/25 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100">
+                    Pending approval
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {rejectedFinalQuiz && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Certificate not approved</h3>
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-5">
+              <div className="flex gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-rose-600/80 text-white">
+                  <XCircle className="h-7 w-7" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-semibold text-white">
+                    {rejectedFinalQuiz.quizTitle || "Final Quiz"}
+                  </h2>
+                  <p className="text-sm text-slate-400">Final Quiz evaluation</p>
+                  <p className="mt-2 text-sm text-rose-100">
+                    Your quiz score was {Math.round(rejectedFinalQuiz.score)}%. Admin or Team Lead
+                    did not approve this certificate for cycle {rejectedFinalQuiz.cycle}. You
+                    cannot view or download it. Ask your Team Lead or Admin if a retake can be
+                    allowed.
+                  </p>
+                  {rejectedFinalQuiz.reviewNote && (
+                    <p className="mt-3 rounded-md bg-rose-950/40 px-3 py-2 text-sm text-rose-50">
+                      <span className="font-medium">Reason: </span>
+                      {rejectedFinalQuiz.reviewNote}
+                    </p>
+                  )}
+                  {formatCertActionBy("rejected", rejectedFinalQuiz.reviewedBy) && (
+                    <p className="mt-2 text-xs text-rose-200/90">
+                      {formatCertActionBy("rejected", rejectedFinalQuiz.reviewedBy)}
+                    </p>
+                  )}
+                  <span className="mt-3 inline-block rounded-md bg-rose-500/25 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-rose-100">
+                    Not approved
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {approvedFinalQuiz.length > 0 && (
           <div className="space-y-4">
@@ -217,9 +312,14 @@ export default function CertificationsPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-4 w-4 text-amber-400" />
-                          {new Date(cert.certifiedAt).toLocaleDateString()}
+                          {formatDisplayDate(cert.certifiedAt)}
                         </span>
                       </div>
+                      {formatCertActionBy("approved", cert.reviewedBy) && (
+                        <p className="mt-2 text-xs text-amber-200/90">
+                          {formatCertActionBy("approved", cert.reviewedBy)}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -238,7 +338,7 @@ export default function CertificationsPage() {
                       type="button"
                       onClick={() => {
                         const data = toFinalQuizCertData(cert);
-                        if (data) printCertificate(data);
+                        if (data) printCertificate(data, brand);
                       }}
                       className="inline-flex items-center gap-2 rounded-lg border border-amber-700/50 px-3 py-2 text-sm text-amber-100 hover:bg-amber-950/40"
                     >
@@ -279,9 +379,14 @@ export default function CertificationsPage() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-4 w-4 text-emerald-400" />
-                            {new Date(certification.certifiedAt).toLocaleDateString()}
+                            {formatDisplayDate(certification.certifiedAt)}
                           </span>
                         </div>
+                        {formatCertActionBy("approved", certification.reviewedBy) && (
+                          <p className="mt-2 text-xs text-emerald-200/90">
+                            {formatCertActionBy("approved", certification.reviewedBy)}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -346,6 +451,62 @@ export default function CertificationsPage() {
           </div>
         )}
 
+        {rejectedProjects.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Certificate not approved</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              {rejectedProjects.map((project) => {
+                const certification = project.certifications[0];
+                return (
+                  <div
+                    key={project.id}
+                    className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-5"
+                  >
+                    <div className="flex gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-rose-600/80 text-white">
+                        <XCircle className="h-7 w-7" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-lg font-semibold text-white">{project.name}</h2>
+                        <p className="text-sm text-slate-400">
+                          {project.categoryRel?.name || "Uncategorized"}
+                        </p>
+                        <p className="mt-2 text-sm text-rose-100">
+                          Quiz score: {Math.round(certification.score)}%. Admin or Team Lead did not
+                          approve this certificate. Retake the quiz when ready, then wait for
+                          review again.
+                        </p>
+                        {certification.reviewNote && (
+                          <p className="mt-3 rounded-md bg-rose-950/40 px-3 py-2 text-sm text-rose-50">
+                            <span className="font-medium">Reason: </span>
+                            {certification.reviewNote}
+                          </p>
+                        )}
+                        {formatCertActionBy("rejected", certification.reviewedBy) && (
+                          <p className="mt-2 text-xs text-rose-200/90">
+                            {formatCertActionBy("rejected", certification.reviewedBy)}
+                          </p>
+                        )}
+                        <span className="mt-3 inline-block rounded-md bg-rose-500/25 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-rose-100">
+                          Not approved
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Link
+                        href={`/projects/${project.id}/quiz`}
+                        className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                      >
+                        Retake project quiz
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {inProgressProjects.length > 0 && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white">Assigned — not certified yet</h3>
@@ -368,11 +529,9 @@ export default function CertificationsPage() {
                         {project.categoryRel?.name || "Uncategorized"}
                       </p>
                       <p className="mt-2 text-sm text-slate-400">
-                        {status === "REJECTED"
-                          ? `Previous quiz (${Math.round(certification.score)}%) was not approved. Retake the quiz and wait for review.`
-                          : status === "FAILED" && certification
-                            ? `Last score: ${Math.round(certification.score)}%. Score 80%+ then wait for approval.`
-                            : "Complete training and pass the project quiz (80%+). Admin or Team Lead must approve before you are certified."}
+                        {status === "FAILED" && certification
+                          ? `Last score: ${Math.round(certification.score)}%. Score 80%+ then wait for approval.`
+                          : "Complete training and pass the project quiz (80%+). Admin or Team Lead must approve before you are certified."}
                       </p>
                     </div>
                   </div>
@@ -406,6 +565,7 @@ export default function CertificationsPage() {
         data={activeCert}
         open={Boolean(activeCert)}
         onClose={() => setActiveCert(null)}
+        brand={brand}
       />
     </AppShell>
   );

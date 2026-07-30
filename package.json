@@ -13,6 +13,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:onboarding": "tsx prisma/seed-dynamic-onboarding.ts",
     "db:studio": "prisma studio",
+    "db:use-local": "node scripts/switch-to-local-db.mjs",
+    "db:use-tfs-hrms": "node scripts/use-tfs-hrms.mjs",
+    "db:sync-from-remote": "node scripts/sync-remote-tms-to-local.mjs",
     "prisma:generate:sqlite": "prisma generate --schema prisma/schema.sqlite.prisma",
     "db:migrate:sqlite-to-mysql": "tsx scripts/migrate-sqlite-to-mysql.ts",
     "postinstall": "prisma generate"
@@ -26,6 +29,7 @@
     "lucide-react": "^0.460.0",
     "mysql2": "^3.22.3",
     "next": "14.2.18",
+    "next-themes": "^0.4.6",
     "nodemailer": "^9.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

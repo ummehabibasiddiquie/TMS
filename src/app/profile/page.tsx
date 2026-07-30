@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { formatRole } from "@/lib/roles";
+import { formatDisplayDate } from "@/lib/format-date";
 import type { Role } from "@/types";
 
 export const dynamic = 'force-dynamic';
@@ -66,11 +67,7 @@ export default function ProfilePage() {
     .slice(0, 2)
     .toUpperCase();
 
-  const dateJoined = user.dateOfJoining
-    ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(
-        new Date(user.dateOfJoining)
-      )
-    : "Not available";
+  const dateJoined = formatDisplayDate(user.dateOfJoining, "Not available");
 
   return (
     <AppShell user={user}>

@@ -126,19 +126,24 @@ export async function GET() {
         overallPercent: dayWise.overallPercent,
         readyForProduction: dayWise.readyForProduction,
         trainingStatus: dayWise.trainingStatus,
+        trainingStart: dayWise.trainingStart,
+        dueSummary: dayWise.dueSummary,
         todayPercent: dayWise.today?.percent ?? 0,
         todayTitle: dayWise.today?.title ?? null,
         todayDone: dayWise.today?.done ?? false,
         todayCompleted: dayWise.today?.completedCount ?? 0,
         todayTotal: dayWise.today?.totalCount ?? 0,
+        todayDue: dayWise.today?.due ?? null,
         days: dayWise.allDays.map((d) => ({
           ...d,
           status:
             d.dayNumber === dayWise.currentDay
               ? "current"
-              : d.done || d.dayNumber < dayWise.currentDay
+              : d.done
                 ? "done"
-                : "upcoming",
+                : d.dayNumber < dayWise.currentDay
+                  ? "open"
+                  : "upcoming",
         })),
       },
       overall: {

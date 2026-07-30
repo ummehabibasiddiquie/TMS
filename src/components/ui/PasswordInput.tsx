@@ -12,6 +12,9 @@ interface PasswordInputProps {
   id?: string;
   name?: string;
   disabled?: boolean;
+  autoComplete?: string;
+  readOnly?: boolean;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
 }
 
 export function PasswordInput({
@@ -23,6 +26,9 @@ export function PasswordInput({
   id,
   name,
   disabled = false,
+  autoComplete,
+  readOnly,
+  onFocus,
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -41,6 +47,9 @@ export function PasswordInput({
         placeholder={placeholder}
         required={required}
         disabled={disabled}
+        autoComplete={autoComplete}
+        readOnly={readOnly}
+        onFocus={onFocus}
         className={`w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-3 pr-12 text-slate-300 focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
       />
       <button

@@ -7,6 +7,7 @@ import {
   listCurriculumDays,
   resetTraineeCurriculumToDefault,
   resolveCurriculumScope,
+  setTraineeCurrentDay,
 } from "@/lib/day-wise-training";
 
 type Ctx = { params: Promise<{ traineeId: string }> };
@@ -28,7 +29,9 @@ export async function POST(req: Request, ctx: Ctx) {
       ? "reset"
       : body.action === "extendWeek"
         ? "extendWeek"
-        : "enable";
+        : body.action === "setDay"
+          ? "setDay"
+          : "enable";
 
   try {
     if (action === "reset") {
@@ -45,7 +48,8 @@ export async function POST(req: Request, ctx: Ctx) {
     }
 
     if (action === "extendWeek") {
-      const extraDays = Number(body.days) > 0 ? Math.min(14, Number(body.days)) : 7;
+      const rawDays = Number(body.days);
+      const extraDays = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 7;
       const result = await extendTraineeCurriculumByWeek(traineeId, extraDays);
       return NextResponse.json({
         ok: true,
@@ -56,6 +60,20 @@ export async function POST(req: Request, ctx: Ctx) {
         fromDay: result.fromDay,
         toDay: result.toDay,
         days: result.days,
+        trainee: { id: gate.trainee.id, name: gate.trainee.name, email: gate.trainee.email },
+      });
+    }
+
+    if (action === "setDay") {
+      const plan = await setTraineeCurrentDay(traineeId, body.dayNumber);
+      return NextResponse.json({
+        ok: true,
+        action: "setDay",
+        currentDay: plan.currentDay,
+        forcedDay: plan.forcedDay ?? null,
+        autoDay: plan.autoDay ?? null,
+        totalDays: plan.totalDays,
+        plan,
         trainee: { id: gate.trainee.id, name: gate.trainee.name, email: gate.trainee.email },
       });
     }

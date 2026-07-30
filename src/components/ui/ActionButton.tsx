@@ -16,11 +16,11 @@ export function ActionButton({
   disabled = false,
 }: ActionButtonProps) {
   const variantStyles = {
-    edit: "text-blue-300 hover:text-blue-200 hover:bg-slate-800",
-    delete: "text-red-400 hover:text-red-300 hover:bg-slate-800",
-    default: "text-slate-400 hover:text-white hover:bg-slate-800",
-    activate: "text-emerald-400 hover:text-emerald-300 hover:bg-slate-800",
-    deactivate: "text-amber-400 hover:text-amber-300 hover:bg-slate-800",
+    edit: "text-blue-700 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-300 dark:hover:bg-slate-800 dark:hover:text-blue-200",
+    delete: "text-red-700 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-slate-800 dark:hover:text-red-300",
+    default: "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
+    activate: "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-400 dark:hover:bg-slate-800 dark:hover:text-emerald-300",
+    deactivate: "text-amber-800 hover:bg-amber-50 hover:text-amber-950 dark:text-amber-400 dark:hover:bg-slate-800 dark:hover:text-amber-300",
   };
 
   return (

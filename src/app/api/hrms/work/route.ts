@@ -52,13 +52,18 @@ export async function GET(req: Request) {
     );
     projects = ids.map((id) => ({ id, name: nameById.get(id) || `Project ${id}` }));
   } else {
-    const { resolveCurriculumScope, listCurriculumDays } = await import(
+    const { resolveCurriculumScope, listCurriculumDays, getDayWisePlan } = await import(
       "@/lib/day-wise-training"
     );
     const { collectPracticeProjectsFromDays } = await import("@/lib/hrms-work");
-    const { scopeKey } = await resolveCurriculumScope(userId!);
+    const [{ scopeKey }, plan] = await Promise.all([
+      resolveCurriculumScope(userId!),
+      getDayWisePlan(userId!),
+    ]);
     const days = await listCurriculumDays(scopeKey);
-    projects = collectPracticeProjectsFromDays(days);
+    projects = collectPracticeProjectsFromDays(days, {
+      throughDayNumber: plan.currentDay,
+    });
   }
 
   const work = await listHrmsWorkForTraineeProjects(

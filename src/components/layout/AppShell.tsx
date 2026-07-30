@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { formatRole } from "@/lib/roles";
 import type { Role } from "@/types";
 import { GlobalLoader } from "@/components/ui/GlobalLoader";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 type NavItem = {
   href: string;
@@ -35,6 +36,7 @@ const navItems: { section: string; items: NavItem[] }[] = [
     section: "Getting Started",
     items: [
       { href: "/", label: "Overview", icon: LayoutDashboard, roles: ["ADMIN", "TRAINER"] },
+      { href: "/trainee", label: "Overview", icon: LayoutDashboard, roles: ["TRAINEE"] },
       { href: "/onboarding", label: "Welcome", icon: ClipboardCheck, roles: ["TRAINEE"] },
     ],
   },
@@ -57,20 +59,20 @@ const navItems: { section: string; items: NavItem[] }[] = [
     section: "My Progress",
     items: [
       { href: "/certifications", label: "Certifications", icon: Award, roles: ["TRAINEE"] },
-      { href: "/profile", label: "Profile", icon: UserCircle },
     ],
   },
   {
     section: "Team Lead",
     items: [
+      { href: "/admin/users", label: "Manage Trainees", icon: Users, roles: ["TRAINER"] },
       { href: "/admin/curriculum", label: "Day Curriculum", icon: ClipboardCheck, roles: ["TRAINER"] },
-      { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["TRAINER"] },
-      { href: "/trainer/courses", label: "Courses", icon: BookOpen, roles: ["TRAINER"] },
-      { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["TRAINER"] },
-      { href: "/admin/users", label: "Team Members", icon: Users, roles: ["TRAINER"] },
       { href: "/admin/progress", label: "Team Progress", icon: BarChart3, roles: ["TRAINER"] },
       { href: "/trainer/day-reviews", label: "Day Reviews", icon: ClipboardCheck, roles: ["TRAINER"] },
+      { href: "/admin/work-metrics", label: "Work Metrics", icon: ClipboardCheck, roles: ["TRAINER"] },
       { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["TRAINER"] },
+      { href: "/trainer/courses", label: "Courses", icon: BookOpen, roles: ["TRAINER"] },
+      { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["TRAINER"] },
+      { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["TRAINER"] },
     ],
   },
   {
@@ -78,13 +80,19 @@ const navItems: { section: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/users", label: "Manage Users", icon: Users, roles: ["ADMIN"] },
       { href: "/admin/curriculum", label: "Day Curriculum", icon: ClipboardCheck, roles: ["ADMIN"] },
-      { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["ADMIN"] },
-      { href: "/admin/content", label: "Courses", icon: BookOpen, roles: ["ADMIN"] },
-      { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["ADMIN"] },
-      { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["ADMIN"] },
       { href: "/admin/progress", label: "Progress Reports", icon: BarChart3, roles: ["ADMIN"] },
       { href: "/trainer/day-reviews", label: "Day Reviews", icon: ClipboardCheck, roles: ["ADMIN"] },
+      { href: "/admin/work-metrics", label: "Work Metrics", icon: ClipboardCheck, roles: ["ADMIN"] },
+      { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["ADMIN"] },
+      { href: "/admin/content", label: "Courses", icon: BookOpen, roles: ["ADMIN"] },
+      { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["ADMIN"] },
+      { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["ADMIN"] },
+      { href: "/admin/certificate-design", label: "Certificate Design", icon: Award, roles: ["ADMIN"] },
     ],
+  },
+  {
+    section: "Account",
+    items: [{ href: "/profile", label: "Profile", icon: UserCircle }],
   },
 ];
 
@@ -150,14 +158,6 @@ export function AppShell({
   return (
     <div className="min-h-screen">
       <GlobalLoader />
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="fixed right-4 top-4 z-50 rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-100 shadow lg:hidden"
-        aria-label="Toggle navigation"
-      >
-        {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
       <aside
         className={cn(
           "fixed left-0 top-0 z-40 flex h-screen w-72 flex-col border-r border-slate-800 bg-slate-950/95 backdrop-blur-xl transition-transform lg:translate-x-0",
@@ -225,9 +225,20 @@ export function AppShell({
           onClick={() => setOpen(false)}
         />
       )}
-      <main className="min-h-screen px-4 pb-8 pt-14 lg:ml-72 lg:px-6 lg:pb-10 lg:pt-8">
-        {children}
-      </main>
+      <div className="flex min-h-screen flex-col lg:ml-72">
+        <header className="sticky top-0 z-40 flex shrink-0 items-center justify-end gap-2 border-b border-slate-800 bg-slate-950/90 px-4 py-2 backdrop-blur-md lg:px-6">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-100 lg:hidden"
+            aria-label="Toggle navigation"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </header>
+        <main className="min-w-0 flex-1 px-4 pt-0 pb-4 lg:px-6 lg:pt-0 lg:pb-6">{children}</main>
+      </div>
     </div>
   );
 }

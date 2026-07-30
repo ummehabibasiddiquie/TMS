@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Users, Calendar, FileText, Link as LinkIcon, Plus, X, Trash2, BookOpen, HelpCircle } from "lucide-react";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/format-date";
 
 type Project = {
   id: string;
@@ -207,13 +208,13 @@ export function ProjectDetails({ project: initialProject, user }: { project: Pro
               {project.startDate && (
                 <div>
                   <p className="text-sm text-slate-400">Start Date</p>
-                  <p className="mt-1 text-white">{new Date(project.startDate).toLocaleDateString()}</p>
+                  <p className="mt-1 text-white">{formatDisplayDate(project.startDate)}</p>
                 </div>
               )}
               {project.endDate && (
                 <div>
                   <p className="text-sm text-slate-400">End Date</p>
-                  <p className="mt-1 text-white">{new Date(project.endDate).toLocaleDateString()}</p>
+                  <p className="mt-1 text-white">{formatDisplayDate(project.endDate)}</p>
                 </div>
               )}
               {project.url && (
@@ -300,7 +301,7 @@ export function ProjectDetails({ project: initialProject, user }: { project: Pro
                       <p className="text-xs text-slate-400">{assignment.user.email}</p>
                       <p className="mt-1 text-xs text-slate-500">
                         Status: {assignment.status} • Assigned:{" "}
-                        {new Date(assignment.assignedAt).toLocaleDateString()}
+                        {formatDisplayDate(assignment.assignedAt)}
                       </p>
                     </div>
                     {canManage && (
@@ -327,7 +328,7 @@ export function ProjectDetails({ project: initialProject, user }: { project: Pro
               </div>
               <div>
                 <p className="text-slate-400">Created at</p>
-                <p className="text-white">{new Date(project.createdAt).toLocaleString()}</p>
+                <p className="text-white">{formatDisplayDateTime(project.createdAt)}</p>
               </div>
             </div>
           </div>

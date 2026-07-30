@@ -38,6 +38,8 @@ model User {
   trainerReviews     TrainerReview[]          @relation("TrainerReviewer")
   dayWorkReviewsGiven DayWorkReview[]         @relation("DayWorkReviewer")
   dayWorkReviewsReceived DayWorkReview[]      @relation("DayWorkTrainee")
+  workMetricsRecorded TraineeWorkMetric[]     @relation("WorkMetricRecorder")
+  workMetrics         TraineeWorkMetric[]     @relation("WorkMetricTrainee")
   achievements       UserAchievement[]
   createdCategories  ProjectCategory[]  @relation("CategoryCreator")
   checklistProgress UserChecklistProgress[]
@@ -46,6 +48,9 @@ model User {
   finalEvaluationAttempts FinalEvaluationAttempt[]
   finalQuizCertificates FinalQuizCertificate[]
   finalQuizCertReviews  FinalQuizCertificate[] @relation("FinalQuizCertReviewer")
+  finalQuizRetakesGranted TraineeProfile[]     @relation("FinalQuizRetakeGranter")
+  finalQuizRetakeGrantsReceived FinalQuizRetakeGrant[] @relation("FinalQuizRetakeTrainee")
+  finalQuizRetakeGrantsGiven    FinalQuizRetakeGrant[] @relation("FinalQuizRetakeGranterAudit")
 }
 
 model ProjectCertification {
@@ -80,16 +85,24 @@ model TraineeProfile {
   trainingStatus     String   @default("REGISTERED")
   readyForProduction Boolean  @default(false)
   currentDayNumber   Int      @default(0)
+  /// Admin/TL can force the trainee onto this day (or later) even if earlier checklist is incomplete.
+  forcedCurrentDayNumber Int?
   /// Increments when Admin adds an extra week so a new final-quiz attempt is allowed.
   evaluationCycle    Int      @default(1)
+  /// Set when Admin / Team Lead allows a final-quiz retake; cleared when the retake is submitted.
+  finalQuizRetakeGrantedAt   DateTime?
+  finalQuizRetakeGrantedById String?
+  finalQuizRetakePreviousScore Float?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   qa                 User?    @relation("QAAssignments", fields: [qaId], references: [id])
   trainer            User?    @relation("TrainerAssignments", fields: [trainerId], references: [id])
+  finalQuizRetakeGrantedBy User? @relation("FinalQuizRetakeGranter", fields: [finalQuizRetakeGrantedById], references: [id])
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([qaId], map: "TraineeProfile_qaId_fkey")
   @@index([trainerId], map: "TraineeProfile_trainerId_fkey")
+  @@index([finalQuizRetakeGrantedById])
 }
 
 model Course {
@@ -474,8 +487,8 @@ model FinalQuizCertificate {
   quizTitle    String
   score        Float
   cycle        Int      @default(1)
-  /// APPROVED on issue — Final Quiz cert is granted on completion (not hire approval).
-  status       String   @default("APPROVED")
+  /// PENDING_REVIEW until Admin / Team Lead approves; APPROVED when visible to trainee.
+  status       String   @default("PENDING_REVIEW")
   certifiedAt  DateTime @default(now())
   reviewedAt   DateTime?
   reviewedById String?
@@ -486,6 +499,23 @@ model FinalQuizCertificate {
 
   @@index([userId])
   @@index([status])
+}
+
+/// Audit log when Admin / Team Lead allows a final-quiz retake.
+model FinalQuizRetakeGrant {
+  id            String   @id @default(cuid())
+  userId        String
+  grantedById   String
+  grantedAt     DateTime @default(now())
+  previousCycle Int
+  newCycle      Int
+  previousScore Float
+  user          User     @relation("FinalQuizRetakeTrainee", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy     User     @relation("FinalQuizRetakeGranterAudit", fields: [grantedById], references: [id])
+
+  @@index([userId])
+  @@index([grantedById])
+  @@index([grantedAt])
 }
 
 model DailySubmission {
@@ -558,6 +588,37 @@ model DayWorkReview {
   @@unique([traineeId, dayNumber])
   @@index([traineeId])
   @@index([reviewerId])
+}
+
+/// Manual training work metrics entered by Admin / Team Lead (replaces live HRMS fetch).
+model TraineeWorkMetric {
+  id               String   @id @default(cuid())
+  traineeId        String
+  dayNumber        Int
+  projectName      String?
+  hoursLogged      Float?
+  productionUnits  Float?
+  /// Quality score 0–100
+  qualityScore     Float?
+  notes            String?  @db.Text
+  recordedById     String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  trainee          User     @relation("WorkMetricTrainee", fields: [traineeId], references: [id], onDelete: Cascade)
+  recordedBy       User     @relation("WorkMetricRecorder", fields: [recordedById], references: [id], onDelete: Cascade)
+
+  @@unique([traineeId, dayNumber])
+  @@index([traineeId])
+  @@index([recordedById])
+}
+
+/// Key/value JSON config (e.g. certificate branding).
+model AppConfig {
+  id          String   @id
+  value       Json
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model ProjectCategory {

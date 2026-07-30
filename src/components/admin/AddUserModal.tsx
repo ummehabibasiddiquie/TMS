@@ -53,6 +53,10 @@ interface AddUserModalProps {
   teamLeadMode?: boolean;
 }
 
+function unlockFieldOnFocus(e: React.FocusEvent<HTMLInputElement>) {
+  e.currentTarget.removeAttribute("readonly");
+}
+
 function openDatePicker(input: HTMLInputElement | null) {
   if (!input) return;
   try {
@@ -88,8 +92,14 @@ export function AddUserModal({
     setLoading(true);
     setError("");
 
-    if (!form.email.trim() || !form.password.trim() || !form.name.trim() || !form.role) {
-      setError("Email, password, name, and role are required");
+    if (!form.email.trim() || !form.password.trim() || !form.name.trim()) {
+      setError("Email, password, and name are required");
+      setLoading(false);
+      return;
+    }
+
+    if (!teamLeadMode && !form.role) {
+      setError("Role is required");
       setLoading(false);
       return;
     }
@@ -111,16 +121,22 @@ export function AddUserModal({
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          dateOfJoining: form.dateOfJoining || todayLocalDate(),
-          role: teamLeadMode ? "TRAINEE" : form.role,
-          trainerId: teamLeadMode
-            ? teamLeads[0]?.id || null
-            : form.role === "TRAINEE"
-              ? form.trainerId || null
-              : null,
-        }),
+        body: JSON.stringify(
+          teamLeadMode
+            ? {
+                name: form.name,
+                email: form.email,
+                password: form.password,
+                employeeId: form.employeeId || undefined,
+                dateOfJoining: form.dateOfJoining || todayLocalDate(),
+              }
+            : {
+                ...form,
+                dateOfJoining: form.dateOfJoining || todayLocalDate(),
+                trainerId:
+                  form.role === "TRAINEE" ? form.trainerId || null : null,
+              }
+        ),
       });
 
       const data = await res.json();
@@ -163,7 +179,9 @@ export function AddUserModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Add New User</h2>
+          <h2 className="text-xl font-semibold text-white">
+            {teamLeadMode ? "Add trainee" : "Add New User"}
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -179,11 +197,16 @@ export function AddUserModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4" autoComplete="off">
           <div>
-            <label className="block text-sm text-slate-400">Name *</label>
+            <label className="block text-sm text-slate-400" htmlFor="add-user-full-name">
+              Name *
+            </label>
             <input
+              id="add-user-full-name"
+              name="new-user-full-name"
               type="text"
+              autoComplete="off"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
@@ -193,9 +216,16 @@ export function AddUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Email *</label>
+            <label className="block text-sm text-slate-400" htmlFor="add-user-email">
+              Email *
+            </label>
             <input
+              id="add-user-email"
+              name="new-user-email"
               type="email"
+              autoComplete="off"
+              readOnly
+              onFocus={unlockFieldOnFocus}
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
@@ -205,8 +235,15 @@ export function AddUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400">Password *</label>
+            <label className="block text-sm text-slate-400" htmlFor="add-user-password">
+              Password *
+            </label>
             <PasswordInput
+              id="add-user-password"
+              name="new-user-password"
+              autoComplete="new-password"
+              readOnly
+              onFocus={unlockFieldOnFocus}
               value={form.password}
               onChange={(value) => setForm({ ...form, password: value })}
               disabled={loading}
@@ -216,11 +253,7 @@ export function AddUserModal({
             />
           </div>
 
-          {teamLeadMode ? (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-400">
-              Role: Employee (trainee) — assigned to you automatically
-            </div>
-          ) : (
+          {!teamLeadMode && (
             <>
               <div>
                 <label className="block text-sm text-slate-400">Role *</label>
@@ -298,7 +331,7 @@ export function AddUserModal({
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
-              {loading ? "Creating..." : "Create User"}
+              {loading ? "Creating..." : teamLeadMode ? "Create trainee" : "Create User"}
             </button>
           </div>
         </form>

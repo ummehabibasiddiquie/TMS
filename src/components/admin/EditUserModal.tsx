@@ -27,6 +27,10 @@ interface EditUserModalProps {
   }) => void;
 }
 
+function unlockFieldOnFocus(e: React.FocusEvent<HTMLInputElement>) {
+  e.currentTarget.removeAttribute("readonly");
+}
+
 function openDatePicker(input: HTMLInputElement | null) {
   if (!input) return;
   try {
@@ -109,14 +113,15 @@ export function EditUserModal({
           name: form.name,
           email: form.email,
           employeeId: form.employeeId || null,
-          role: teamLeadMode ? "TRAINEE" : form.role,
           dateOfJoining: form.dateOfJoining || null,
           password: form.password || undefined,
-          trainerId: teamLeadMode
-            ? undefined
-            : form.role === "TRAINEE"
-              ? form.trainerId || null
-              : undefined,
+          ...(teamLeadMode
+            ? {}
+            : {
+                role: form.role,
+                trainerId:
+                  form.role === "TRAINEE" ? form.trainerId || null : undefined,
+              }),
         }),
       });
 
@@ -149,7 +154,9 @@ export function EditUserModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
       <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg border border-slate-800 bg-slate-900 p-6">
-        <h2 className="mb-4 text-xl font-semibold text-white">Edit User</h2>
+        <h2 className="mb-4 text-xl font-semibold text-white">
+          {teamLeadMode ? "Edit trainee" : "Edit User"}
+        </h2>
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-400">
@@ -157,11 +164,16 @@ export function EditUserModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div>
-            <label className="mb-1 block text-sm text-slate-400">Full Name</label>
+            <label className="mb-1 block text-sm text-slate-400" htmlFor="edit-user-full-name">
+              Full Name
+            </label>
             <input
+              id="edit-user-full-name"
+              name="edit-user-full-name"
               type="text"
+              autoComplete="off"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
@@ -170,9 +182,14 @@ export function EditUserModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm text-slate-400">Email Address</label>
+            <label className="mb-1 block text-sm text-slate-400" htmlFor="edit-user-email">
+              Email Address
+            </label>
             <input
+              id="edit-user-email"
+              name="edit-user-email"
               type="email"
+              autoComplete="off"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
@@ -192,11 +209,7 @@ export function EditUserModal({
             />
           </div>
 
-          {teamLeadMode ? (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-400">
-              Role: Employee (trainee) — stays on your team
-            </div>
-          ) : (
+          {!teamLeadMode && (
             <>
               <div>
                 <label className="mb-1 block text-sm text-slate-400">Role</label>
@@ -250,8 +263,15 @@ export function EditUserModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm text-slate-400">New Password (Optional)</label>
+            <label className="mb-1 block text-sm text-slate-400" htmlFor="edit-user-new-password">
+              New Password (Optional)
+            </label>
             <PasswordInput
+              id="edit-user-new-password"
+              name="edit-user-new-password"
+              autoComplete="new-password"
+              readOnly
+              onFocus={unlockFieldOnFocus}
               value={form.password}
               onChange={(value) => setForm({ ...form, password: value })}
               disabled={loading}

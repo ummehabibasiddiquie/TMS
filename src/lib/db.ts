@@ -8,15 +8,21 @@ function createClient() {
   });
 }
 
-function hasFinalQuizModel(client: PrismaClient) {
-  return Boolean((client as { finalEvaluationQuiz?: unknown }).finalEvaluationQuiz);
+function hasRequiredModels(client: PrismaClient) {
+  const c = client as {
+    finalEvaluationQuiz?: unknown;
+    appConfig?: unknown;
+    traineeWorkMetric?: unknown;
+  };
+  return Boolean(c.finalEvaluationQuiz && c.appConfig && c.traineeWorkMetric);
 }
 
 let prisma = globalForPrisma.prisma ?? createClient();
 
 // Dev: if the process kept an old client from before schema generate, replace it.
-if (process.env.NODE_ENV !== "production" && !hasFinalQuizModel(prisma)) {
+if (process.env.NODE_ENV !== "production" && !hasRequiredModels(prisma)) {
   void prisma.$disconnect().catch(() => undefined);
+  globalForPrisma.prisma = undefined;
   prisma = createClient();
 }
 

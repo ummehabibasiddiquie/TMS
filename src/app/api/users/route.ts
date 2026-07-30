@@ -61,30 +61,32 @@ export async function POST(req: Request) {
   const { email, password, name, employeeId, role, dateOfJoining, trainerId, qaId } =
     await req.json();
 
-  if (!email?.trim() || !password?.trim() || !name?.trim() || !role) {
+  const isTeamLeadActor = actor.role === "TRAINER";
+
+  if (!email?.trim() || !password?.trim() || !name?.trim()) {
     return NextResponse.json(
-      { error: "Email, password, name, and role are required" },
+      { error: "Email, password, and name are required" },
       { status: 400 }
     );
   }
 
-  let effectiveRole = role as string;
+  if (!isTeamLeadActor && !role) {
+    return NextResponse.json({ error: "Role is required" }, { status: 400 });
+  }
+
+  let effectiveRole: string;
   let nextTrainerId: string | null = null;
   let nextQaId: string | null = null;
 
-  if (actor.role === "TRAINER") {
-    if (role !== "TRAINEE") {
-      return NextResponse.json(
-        { error: "Team Leads can only create trainee accounts" },
-        { status: 403 }
-      );
-    }
+  if (isTeamLeadActor) {
+    // Team leads may only create trainees assigned to themselves (ignore client role).
     effectiveRole = "TRAINEE";
     nextTrainerId = actor.id;
   } else {
     if (!["ADMIN", "TRAINER", "TRAINEE"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
+    effectiveRole = role as string;
   }
 
   if (password.length < 6) {

@@ -26,6 +26,12 @@ type Row = {
   completedDays: CompletedDay[];
 };
 
+const panelCard =
+  "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 dark:shadow-none";
+
+const fieldClass =
+  "rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:shadow-none";
+
 export default function DayReviewsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,49 +90,56 @@ export default function DayReviewsPage() {
   }
 
   if (loading) {
-    return <p className="text-slate-400">Loading day work…</p>;
+    return (
+      <p className="text-sm text-slate-600 dark:text-slate-400">Loading day work…</p>
+    );
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto min-w-0 max-w-5xl space-y-6 pb-8">
       <div>
-        <h1 className="text-3xl font-bold">Day reviews</h1>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-800 dark:text-blue-300">
+          Team Lead
+        </p>
+        <h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">Day reviews</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
           See what each trainee completed on their day-wise plan. Leaving a review is optional.
         </p>
-        <Link href="/admin/progress" className="mt-2 inline-block text-sm text-blue-400 hover:underline">
+        <Link
+          href="/admin/progress"
+          className="mt-3 inline-block text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+        >
           Full team progress →
         </Link>
       </div>
 
       {msg && (
-        <p className="rounded-xl bg-blue-500/10 px-4 py-2 text-sm text-blue-200">{msg}</p>
+        <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+          {msg}
+        </p>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-slate-500">No trainees on your team yet.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-500">No trainees on your team yet.</p>
       ) : (
         <div className="space-y-4">
           {rows.map((row) => (
-            <div
-              key={row.trainee.id}
-              className="rounded-2xl border border-slate-700 bg-slate-900/50 p-5"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white">{row.trainee.name}</p>
-                  <p className="text-xs text-slate-500">{row.trainee.email}</p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Day {row.currentDay} · Overall {row.overallPercent}%
-                    {row.todayTitle
-                      ? ` · Today: ${row.todayTitle} (${row.todayPercent}%)`
-                      : ""}
-                  </p>
-                </div>
+            <div key={row.trainee.id} className={panelCard}>
+              <div>
+                <p className="font-semibold text-slate-900 dark:text-white">{row.trainee.name}</p>
+                <p className="text-xs text-slate-500">{row.trainee.email}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  Day {row.currentDay} · Overall {row.overallPercent}%
+                  {row.todayTitle
+                    ? ` · Today: ${row.todayTitle} (${row.todayPercent}%)`
+                    : ""}
+                </p>
               </div>
 
               {row.completedDays.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-500">No completed days yet.</p>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-500">
+                  No completed days yet.
+                </p>
               ) : (
                 <ul className="mt-4 space-y-2">
                   {row.completedDays.map((d) => {
@@ -135,28 +148,32 @@ export default function DayReviewsPage() {
                     return (
                       <li
                         key={key}
-                        className="rounded-xl border border-slate-800 bg-slate-950/40"
+                        className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40"
                       >
                         <button
                           type="button"
                           onClick={() => setOpenKey(open ? null : key)}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-100/80 dark:hover:bg-slate-800/30"
                         >
-                          <span className="flex items-center gap-2 text-sm">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                            Day {d.dayNumber}: {d.title}
-                            {d.projectName ? ` · ${d.projectName}` : ""}
+                          <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-800 dark:text-slate-200">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            <span className="font-medium">
+                              Day {d.dayNumber}: {d.title}
+                              {d.projectName ? ` · ${d.projectName}` : ""}
+                            </span>
                             {d.review && (
-                              <span className="text-xs text-blue-300">· reviewed</span>
+                              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                · reviewed
+                              </span>
                             )}
                           </span>
                           <ChevronDown
-                            className={`h-4 w-4 text-slate-500 transition ${open ? "rotate-180" : ""}`}
+                            className={`h-4 w-4 shrink-0 text-slate-500 transition ${open ? "rotate-180" : ""}`}
                           />
                         </button>
                         {open && (
-                          <div className="space-y-3 border-t border-slate-800 px-4 py-3">
-                            <ul className="space-y-1 text-sm text-slate-300">
+                          <div className="space-y-3 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900/30">
+                            <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
                               {d.checklist.map((c) => (
                                 <li key={`c-${c.title}`}>
                                   {c.completed ? "✓" : "○"}{" "}
@@ -169,10 +186,7 @@ export default function DayReviewsPage() {
                                   {l.completed ? "✓" : "○"}{" "}
                                   <span className="text-slate-500">Course · </span>
                                   {l.title}
-                                  <span className="text-xs text-slate-500">
-                                    {" "}
-                                    · {l.courseTitle}
-                                  </span>
+                                  <span className="text-xs text-slate-500"> · {l.courseTitle}</span>
                                 </li>
                               ))}
                               {(d.workItems || []).map((c) => (
@@ -191,14 +205,14 @@ export default function DayReviewsPage() {
                                 }
                                 placeholder="Optional notes for this day…"
                                 rows={2}
-                                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                                className={fieldClass}
                               />
                               <select
                                 value={ratings[key] || ""}
                                 onChange={(e) =>
                                   setRatings((prev) => ({ ...prev, [key]: e.target.value }))
                                 }
-                                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                                className={fieldClass}
                               >
                                 <option value="">Rating</option>
                                 {[1, 2, 3, 4, 5].map((n) => (
@@ -210,7 +224,7 @@ export default function DayReviewsPage() {
                               <button
                                 type="button"
                                 onClick={() => saveReview(row.trainee.id, d.dayNumber)}
-                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 px-3 py-2 text-sm hover:bg-blue-500"
+                                className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
                               >
                                 <Save className="h-4 w-4" />
                                 Save

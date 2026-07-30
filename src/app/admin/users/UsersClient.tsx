@@ -6,6 +6,7 @@ import { AddUserModal } from "@/components/admin/AddUserModal";
 import { EditUserModal } from "@/components/admin/EditUserModal";
 import { Pencil, Trash2, UserCheck, UserX } from "lucide-react";
 import { ActionButton } from "@/components/ui/ActionButton";
+import { formatDisplayDate } from "@/lib/format-date";
 
 type User = {
   id: string;
@@ -128,19 +129,19 @@ export function UsersClient({
 
   return (
     <>
-      <div className="w-full space-y-8">
+      <div className="w-full space-y-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
-            {isTeamLead ? "Team Lead — Team members" : "Admin — Manage Users"}
+            {isTeamLead ? "Team Lead — Manage trainees" : "Admin — Manage Users"}
           </p>
-          <h1 className="mt-3 text-3xl font-bold text-white">
+          <h1 className="mt-2 text-3xl font-bold text-white">
             {isTeamLead
-              ? "Add, edit, and activate your trainees"
+              ? "Add and manage trainees on your team"
               : "Create, edit, and deactivate accounts"}
           </h1>
-          <p className="mt-2 text-slate-400">
+          <p className="mt-1 text-slate-400">
             {isTeamLead
-              ? "Only trainees on your team. Training content comes from Day Curriculum — no separate course or project assign."
+              ? "You can add Employee (trainee) accounts only — not Admin or Team Lead. New trainees are assigned to you automatically."
               : "All users (Admin, Team Lead, and Employee). Courses and work are set in Day Curriculum, not by assigning here."}
           </p>
         </div>
@@ -154,16 +155,18 @@ export function UsersClient({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 flex-1"
               />
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
-              >
-                <option>All Roles</option>
-                <option>Employee</option>
-                {!isTeamLead && <option>Team Lead</option>}
-                {!isTeamLead && <option>Admin</option>}
-              </select>
+              {!isTeamLead && (
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                >
+                  <option>All Roles</option>
+                  <option>Employee</option>
+                  <option>Team Lead</option>
+                  <option>Admin</option>
+                </select>
+              )}
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -223,11 +226,7 @@ export function UsersClient({
                     )}
                     <td className="py-3">
                       {user.dateOfJoining
-                        ? new Intl.DateTimeFormat("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "2-digit",
-                          }).format(new Date(user.dateOfJoining))
+                        ? formatDisplayDate(user.dateOfJoining)
                         : "-"}
                     </td>
                     <td className="py-3">

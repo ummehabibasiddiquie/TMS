@@ -58,12 +58,12 @@ export default async function AdminContentPage() {
   const questionCount = quizzes.reduce((total, quiz) => total + quiz.questions.length, 0);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-5xl space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">Admin - Content Studio</p>
-          <h1 className="mt-2 text-3xl font-bold text-white">Build training, lessons, and certification quizzes</h1>
-          <p className="mt-2 max-w-xl text-slate-400">
+          <h1 className="mt-1 text-3xl font-bold text-white">Build training, lessons, and certification quizzes</h1>
+          <p className="mt-1 max-w-xl text-slate-400">
             This is the admin workspace for managing the learning content employees complete before certification.
           </p>
         </div>
