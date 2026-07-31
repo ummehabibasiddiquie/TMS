@@ -18,7 +18,12 @@
     "db:sync-from-remote": "node scripts/sync-remote-tms-to-local.mjs",
     "prisma:generate:sqlite": "prisma generate --schema prisma/schema.sqlite.prisma",
     "db:migrate:sqlite-to-mysql": "tsx scripts/migrate-sqlite-to-mysql.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "predeploy:check": "tsx scripts/test-deployment-config.ts",
+    "db:generate-url": "tsx scripts/generate-db-url.ts",
+    "db:migrate-to-hostinger": "tsx scripts/migrate-to-hostinger.ts",
+    "db:push:remote": "node scripts/push-schema-to-remote.mjs",
+    "db:reset-remote-and-push": "node scripts/reset-remote-and-push.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

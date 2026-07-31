@@ -33,7 +33,7 @@ async function main() {
       connectTimeout: 10000,
     });
     const [users] = await conn.query(
-      "SELECT id, name, email, employeeId, role FROM User WHERE role='TRAINEE' LIMIT 20"
+      "SELECT id, name, email, employeeId, role FROM `user` WHERE role='TRAINEE' LIMIT 20"
     );
     console.log("TMS_TRAINEES", JSON.stringify(users, null, 2));
     await conn.end();

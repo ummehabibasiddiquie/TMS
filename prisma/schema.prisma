@@ -51,6 +51,7 @@ model User {
   finalQuizRetakesGranted TraineeProfile[]     @relation("FinalQuizRetakeGranter")
   finalQuizRetakeGrantsReceived FinalQuizRetakeGrant[] @relation("FinalQuizRetakeTrainee")
   finalQuizRetakeGrantsGiven    FinalQuizRetakeGrant[] @relation("FinalQuizRetakeGranterAudit")
+  @@map("user")
 }
 
 model ProjectCertification {
@@ -73,6 +74,7 @@ model ProjectCertification {
   @@index([projectId], map: "ProjectCertification_projectId_fkey")
   @@index([status])
   @@index([reviewedById])
+  @@map("projectcertification")
 }
 
 model TraineeProfile {
@@ -103,6 +105,7 @@ model TraineeProfile {
   @@index([qaId], map: "TraineeProfile_qaId_fkey")
   @@index([trainerId], map: "TraineeProfile_trainerId_fkey")
   @@index([finalQuizRetakeGrantedById])
+  @@map("traineeprofile")
 }
 
 model Course {
@@ -120,6 +123,7 @@ model Course {
   completionRules  CompletionRule[]
   prerequisites    Prerequisite[]     @relation("CoursePrereq")
   requiredFor      Prerequisite[]     @relation("PrereqCourse")
+  @@map("course")
 }
 
 model Module {
@@ -132,6 +136,7 @@ model Module {
   course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId], map: "Module_courseId_fkey")
+  @@map("module")
 }
 
 model Lesson {
@@ -153,6 +158,7 @@ model Lesson {
   curriculumLinks CurriculumDayLesson[]
 
   @@index([moduleId], map: "Lesson_moduleId_fkey")
+  @@map("lesson")
 }
 
 model Topic {
@@ -167,6 +173,7 @@ model Topic {
   lesson      Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@index([lessonId], map: "Topic_lessonId_fkey")
+  @@map("topic")
 }
 
 model Quiz {
@@ -180,6 +187,7 @@ model Quiz {
   questions    QuizQuestion[]
 
   @@index([lessonId], map: "Quiz_lessonId_fkey")
+  @@map("quiz")
 }
 
 model QuizQuestion {
@@ -192,6 +200,7 @@ model QuizQuestion {
   order       Int    @default(0)
 
   @@index([quizId], map: "QuizQuestion_quizId_fkey")
+  @@map("quizquestion")
 }
 
 model Assignment {
@@ -201,6 +210,7 @@ model Assignment {
   instructions String?
   lesson       Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   submissions  AssignmentSubmission[]
+  @@map("assignment")
 }
 
 model Prerequisite {
@@ -212,6 +222,7 @@ model Prerequisite {
 
   @@index([courseId], map: "Prerequisite_courseId_fkey")
   @@index([prereqCourseId], map: "Prerequisite_prereqCourseId_fkey")
+  @@map("prerequisite")
 }
 
 model CompletionRule {
@@ -223,6 +234,7 @@ model CompletionRule {
   course            Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId], map: "CompletionRule_courseId_fkey")
+  @@map("completionrule")
 }
 
 model Enrollment {
@@ -241,6 +253,7 @@ model Enrollment {
 
   @@unique([userId, courseId])
   @@index([courseId], map: "Enrollment_courseId_fkey")
+  @@map("enrollment")
 }
 
 model LessonProgress {
@@ -260,6 +273,7 @@ model LessonProgress {
 
   @@unique([userId, lessonId])
   @@index([lessonId], map: "LessonProgress_lessonId_fkey")
+  @@map("lessonprogress")
 }
 
 // Audit trail when Admin/Team Lead marks a lesson done or resets it
@@ -278,6 +292,7 @@ model LessonProgressOverride {
   @@index([userId])
   @@index([lessonId])
   @@index([changedById])
+  @@map("lessonprogressoverride")
 }
 
 model QuizAttempt {
@@ -293,6 +308,7 @@ model QuizAttempt {
 
   @@index([quizId], map: "QuizAttempt_quizId_fkey")
   @@index([userId], map: "QuizAttempt_userId_fkey")
+  @@map("quizattempt")
 }
 
 model AssignmentSubmission {
@@ -306,6 +322,7 @@ model AssignmentSubmission {
 
   @@index([assignmentId], map: "AssignmentSubmission_assignmentId_fkey")
   @@index([userId], map: "AssignmentSubmission_userId_fkey")
+  @@map("assignmentsubmission")
 }
 
 model LearningStreak {
@@ -315,6 +332,7 @@ model LearningStreak {
   longestStreak Int       @default(0)
   lastLearnDate DateTime?
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("learningstreak")
 }
 
 model Achievement {
@@ -325,6 +343,7 @@ model Achievement {
   icon        String?
   milestone   Int?
   users       UserAchievement[]
+  @@map("achievement")
 }
 
 model UserAchievement {
@@ -337,6 +356,7 @@ model UserAchievement {
 
   @@unique([userId, achievementId])
   @@index([achievementId], map: "UserAchievement_achievementId_fkey")
+  @@map("userachievement")
 }
 
 model LessonNote {
@@ -350,6 +370,7 @@ model LessonNote {
 
   @@unique([userId, lessonId])
   @@index([lessonId], map: "LessonNote_lessonId_fkey")
+  @@map("lessonnote")
 }
 
 model DiscussionComment {
@@ -363,6 +384,7 @@ model DiscussionComment {
 
   @@index([lessonId], map: "DiscussionComment_lessonId_fkey")
   @@index([userId], map: "DiscussionComment_userId_fkey")
+  @@map("discussioncomment")
 }
 
 // Day-wise onboarding + training curriculum (Admin/TL curated)
@@ -387,6 +409,7 @@ model CurriculumDay {
   @@unique([scopeKey, dayNumber])
   @@index([scopeKey])
   @@index([hrmsProjectId])
+  @@map("curriculumday")
 }
 
 model CurriculumChecklistItem {
@@ -403,6 +426,7 @@ model CurriculumChecklistItem {
   progress    UserChecklistProgress[]
 
   @@index([dayId])
+  @@map("curriculumchecklistitem")
 }
 
 model CurriculumDayLesson {
@@ -417,6 +441,7 @@ model CurriculumDayLesson {
   @@unique([dayId, lessonId])
   @@index([dayId])
   @@index([lessonId])
+  @@map("curriculumdaylesson")
 }
 
 model UserChecklistProgress {
@@ -432,6 +457,7 @@ model UserChecklistProgress {
   @@unique([userId, itemId])
   @@index([userId])
   @@index([itemId])
+  @@map("userchecklistprogress")
 }
 
 /// One global final evaluation quiz (unlocks after all day-wise training is complete).
@@ -445,6 +471,7 @@ model FinalEvaluationQuiz {
   updatedAt    DateTime @updatedAt
   questions    FinalEvaluationQuestion[]
   attempts     FinalEvaluationAttempt[]
+  @@map("finalevaluationquiz")
 }
 
 model FinalEvaluationQuestion {
@@ -458,6 +485,7 @@ model FinalEvaluationQuestion {
   quiz     FinalEvaluationQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([quizId])
+  @@map("finalevaluationquestion")
 }
 
 /// One attempt per user per quiz per evaluationCycle (no requiz within a cycle).
@@ -477,6 +505,7 @@ model FinalEvaluationAttempt {
   @@unique([userId, quizId, cycle])
   @@index([userId])
   @@index([quizId])
+  @@map("finalevaluationattempt")
 }
 
 /// Issued when a trainee completes the Final Quiz (one per attempt / cycle).
@@ -499,6 +528,7 @@ model FinalQuizCertificate {
 
   @@index([userId])
   @@index([status])
+  @@map("finalquizcertificate")
 }
 
 /// Audit log when Admin / Team Lead allows a final-quiz retake.
@@ -516,6 +546,7 @@ model FinalQuizRetakeGrant {
   @@index([userId])
   @@index([grantedById])
   @@index([grantedAt])
+  @@map("finalquizretakegrant")
 }
 
 model DailySubmission {
@@ -540,6 +571,7 @@ model DailySubmission {
 
   @@unique([userId, dayNumber, phase])
   @@index([projectId], map: "DailySubmission_projectId_fkey")
+  @@map("dailysubmission")
 }
 
 model QAReview {
@@ -555,6 +587,7 @@ model QAReview {
   submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([reviewerId], map: "QAReview_reviewerId_fkey")
+  @@map("qareview")
 }
 
 model TrainerReview {
@@ -570,6 +603,7 @@ model TrainerReview {
   submission   DailySubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([reviewerId], map: "TrainerReview_reviewerId_fkey")
+  @@map("trainerreview")
 }
 
 /// Optional Team Lead feedback on a trainee's completed curriculum day
@@ -588,6 +622,7 @@ model DayWorkReview {
   @@unique([traineeId, dayNumber])
   @@index([traineeId])
   @@index([reviewerId])
+  @@map("dayworkreview")
 }
 
 /// Manual training work metrics entered by Admin / Team Lead (replaces live HRMS fetch).
@@ -610,6 +645,7 @@ model TraineeWorkMetric {
   @@unique([traineeId, dayNumber])
   @@index([traineeId])
   @@index([recordedById])
+  @@map("traineeworkmetric")
 }
 
 /// Key/value JSON config (e.g. certificate branding).
@@ -619,6 +655,7 @@ model AppConfig {
   updatedById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  @@map("appconfig")
 }
 
 model ProjectCategory {
@@ -634,6 +671,7 @@ model ProjectCategory {
   deletedAt   DateTime?
 
   projects    Project[] @relation("ProjectCategoryRelation")
+  @@map("projectcategory")
 }
 
 model Project {
@@ -676,4 +714,5 @@ model ProjectAssignment {
   @@unique([projectId, userId])
   @@index([assignedBy], map: "ProjectAssignment_assignedBy_fkey")
   @@index([userId], map: "ProjectAssignment_userId_fkey")
+  @@map("projectassignment")
 }

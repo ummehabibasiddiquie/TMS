@@ -16,7 +16,24 @@ export default async function Home() {
   }
 
   if (user.role === "ADMIN") {
-    const stats = await getAdminDashboardStats();
+    let stats;
+    try {
+      stats = await getAdminDashboardStats();
+    } catch (error) {
+      console.error("Failed to load admin dashboard stats:", error);
+      // Provide fallback stats to prevent page from crashing
+      stats = {
+        activeTrainees: 0,
+        courses: 0,
+        projects: 0,
+        pendingCerts: 0,
+        awaitingEvaluation: 0,
+        overdueTrainees: 0,
+        dueTodayTrainees: 0,
+        dayReviewsGiven: 0,
+        attention: [],
+      };
+    }
     return (
       <AppShell user={user}>
         <AdminOverview name={user.name} stats={stats} />
@@ -25,7 +42,24 @@ export default async function Home() {
   }
 
   if (user.role === "TRAINER" || user.role === "TEAM_LEAD") {
-    const stats = await getTeamLeadDashboardStats(user.id);
+    let stats;
+    try {
+      stats = await getTeamLeadDashboardStats(user.id);
+    } catch (error) {
+      console.error("Failed to load team lead dashboard stats:", error);
+      // Provide fallback stats to prevent page from crashing
+      stats = {
+        activeTrainees: 0,
+        courses: 0,
+        projects: 0,
+        pendingCerts: 0,
+        awaitingEvaluation: 0,
+        overdueTrainees: 0,
+        dueTodayTrainees: 0,
+        dayReviewsGiven: 0,
+        attention: [],
+      };
+    }
     return (
       <AppShell user={user}>
         <TeamLeadOverview name={user.name} stats={stats} />

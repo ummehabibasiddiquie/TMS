@@ -135,45 +135,87 @@ async function buildAttentionList(traineeFilter: TraineeFilter): Promise<{
 export async function getAdminDashboardStats(): Promise<DashboardStats> {
   const filter = traineeWhere();
 
-  const [activeTrainees, courses, hrms, pendingCerts, dayReviewsGiven, attentionData] =
-    await Promise.all([
-      prisma.user.count({ where: filter }),
-      prisma.course.count({ where: PUBLISHED_COURSE }),
-      listHrmsProjects({ activeOnly: true }),
-      prisma.projectCertification.count({ where: certWhere(filter) }),
-      prisma.dayWorkReview.count(),
-      buildAttentionList(filter),
-    ]);
+  try {
+    const [activeTrainees, courses, hrms, pendingCerts, dayReviewsGiven, attentionData] =
+      await Promise.all([
+        prisma.user.count({ where: filter }).catch(() => 0),
+        prisma.course.count({ where: PUBLISHED_COURSE }).catch(() => 0),
+        listHrmsProjects({ activeOnly: true }).catch(() => ({ projects: [] })),
+        prisma.projectCertification.count({ where: certWhere(filter) }).catch(() => 0),
+        prisma.dayWorkReview.count().catch(() => 0),
+        buildAttentionList(filter).catch(() => ({
+          attention: [],
+          awaitingEvaluation: 0,
+          overdueTrainees: 0,
+          dueTodayTrainees: 0,
+        })),
+      ]);
 
-  return {
-    activeTrainees,
-    courses,
-    projects: hrms.projects.length,
-    pendingCerts,
-    dayReviewsGiven,
-    ...attentionData,
-  };
+    return {
+      activeTrainees,
+      courses,
+      projects: hrms.projects.length,
+      pendingCerts,
+      dayReviewsGiven,
+      ...attentionData,
+    };
+  } catch (error) {
+    console.error("Error in getAdminDashboardStats:", error);
+    // Return safe defaults to prevent page crashes
+    return {
+      activeTrainees: 0,
+      courses: 0,
+      projects: 0,
+      pendingCerts: 0,
+      awaitingEvaluation: 0,
+      overdueTrainees: 0,
+      dueTodayTrainees: 0,
+      dayReviewsGiven: 0,
+      attention: [],
+    };
+  }
 }
 
 export async function getTeamLeadDashboardStats(trainerId: string): Promise<DashboardStats> {
   const filter = traineeWhere(trainerId);
 
-  const [activeTrainees, courses, hrms, pendingCerts, dayReviewsGiven, attentionData] =
-    await Promise.all([
-      prisma.user.count({ where: filter }),
-      prisma.course.count({ where: PUBLISHED_COURSE }),
-      listHrmsProjects({ activeOnly: true }),
-      prisma.projectCertification.count({ where: certWhere(filter) }),
-      prisma.dayWorkReview.count({ where: { reviewerId: trainerId } }),
-      buildAttentionList(filter),
-    ]);
+  try {
+    const [activeTrainees, courses, hrms, pendingCerts, dayReviewsGiven, attentionData] =
+      await Promise.all([
+        prisma.user.count({ where: filter }).catch(() => 0),
+        prisma.course.count({ where: PUBLISHED_COURSE }).catch(() => 0),
+        listHrmsProjects({ activeOnly: true }).catch(() => ({ projects: [] })),
+        prisma.projectCertification.count({ where: certWhere(filter) }).catch(() => 0),
+        prisma.dayWorkReview.count({ where: { reviewerId: trainerId } }).catch(() => 0),
+        buildAttentionList(filter).catch(() => ({
+          attention: [],
+          awaitingEvaluation: 0,
+          overdueTrainees: 0,
+          dueTodayTrainees: 0,
+        })),
+      ]);
 
-  return {
-    activeTrainees,
-    courses,
-    projects: hrms.projects.length,
-    pendingCerts,
-    dayReviewsGiven,
-    ...attentionData,
-  };
+    return {
+      activeTrainees,
+      courses,
+      projects: hrms.projects.length,
+      pendingCerts,
+      dayReviewsGiven,
+      ...attentionData,
+    };
+  } catch (error) {
+    console.error("Error in getTeamLeadDashboardStats:", error);
+    // Return safe defaults to prevent page crashes
+    return {
+      activeTrainees: 0,
+      courses: 0,
+      projects: 0,
+      pendingCerts: 0,
+      awaitingEvaluation: 0,
+      overdueTrainees: 0,
+      dueTodayTrainees: 0,
+      dayReviewsGiven: 0,
+      attention: [],
+    };
+  }
 }
