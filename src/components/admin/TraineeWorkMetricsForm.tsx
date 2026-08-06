@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pencil, Save, X } from "lucide-react";
 import {
-  productionScorePercent,
-  formatPercent,
+  formatWorkGoal,
+  formatUnitsVsGoal,
   qualityScoreLabel,
 } from "@/lib/work-metrics-display";
 import { formatDisplayDate } from "@/lib/format-date";
@@ -27,6 +27,7 @@ type DayOption = {
   hasTrainingWork?: boolean;
   dueDate?: string | null;
   productionTarget?: number | null;
+  assignedHours?: number | null;
 };
 
 type Draft = {
@@ -106,6 +107,53 @@ function fmt(v: number | null | undefined, suffix = "") {
   return `${v}${suffix}`;
 }
 
+function parseUnitsValue(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function ProductionVsTarget({
+  units,
+  hoursLogged,
+  target,
+  assignedHours,
+  compact,
+}: {
+  units: number | null;
+  hoursLogged?: number | null;
+  target: number | null | undefined;
+  assignedHours?: number | null;
+  compact?: boolean;
+}) {
+  const hint = compact ? "text-[10px]" : "text-xs";
+  const score = compact ? "text-sm font-semibold" : "text-base font-semibold";
+  const goal = formatWorkGoal(assignedHours, target);
+  if (!goal) {
+    return (
+      <span
+        className={`${hint} text-slate-500 dark:text-slate-400`}
+        title="Set assigned hours and unit goal on the day's training-work item in Day Curriculum"
+      >
+        No goal set
+      </span>
+    );
+  }
+  return (
+    <div className="space-y-0.5">
+      <span className={`${hint} text-slate-500 dark:text-slate-400`}>Goal: {goal}</span>
+      <span className={`${score} tabular-nums text-slate-800 dark:text-slate-200`}>
+        {formatUnitsVsGoal(units, target)}
+      </span>
+      {hoursLogged != null && hoursLogged > 0 && (
+        <span className={`${hint} tabular-nums text-slate-500 dark:text-slate-400`}>
+          Logged {hoursLogged} h
+        </span>
+      )}
+    </div>
+  );
+}
+
 function existingKey(existing: Existing[]) {
   return existing
     .map(
@@ -157,6 +205,8 @@ export function TraineeWorkMetricsForm({
         hasTrainingWork: true,
         productionTarget:
           fromSchedule?.productionTarget ?? partial.productionTarget ?? null,
+        assignedHours:
+          fromSchedule?.assignedHours ?? partial.assignedHours ?? null,
       };
       if (!isTrainingWorkDay(merged) && !partial.projectName?.trim()) return;
       list.push(merged);
@@ -377,31 +427,21 @@ export function TraineeWorkMetricsForm({
               updateDraft(day.dayNumber, "productionUnits", e.target.value)
             }
             className={inputClass}
-            aria-label={`Production units day ${day.dayNumber}`}
+            aria-label={`Units completed day ${day.dayNumber}`}
           />
-          {day.productionTarget != null && day.productionTarget > 0 && (
-            <p
-              className={`mt-1 text-slate-500 ${
-                compact ? "text-[10px]" : "text-xs"
-              }`}
-            >
-              Target: {day.productionTarget} units
-            </p>
-          )}
         </td>
-        <td
-          className={`${cell} tabular-nums text-slate-700 dark:text-slate-300 ${
-            compact ? "text-xs" : "text-base"
-          }`}
-        >
-          {formatPercent(
-            productionScorePercent(
-              draft.productionUnits.trim() === ""
+        <td className={cell}>
+          <ProductionVsTarget
+            compact={compact}
+            units={parseUnitsValue(draft.productionUnits)}
+            hoursLogged={
+              draft.hoursLogged.trim() === ""
                 ? null
-                : Number(draft.productionUnits),
-              day.productionTarget ?? null
-            )
-          )}
+                : Number(draft.hoursLogged)
+            }
+            target={day.productionTarget}
+            assignedHours={day.assignedHours}
+          />
         </td>
         <td className={cell}>
           <input
@@ -463,8 +503,69 @@ export function TraineeWorkMetricsForm({
   }
 
   const th = compact
-    ? "pb-1 pr-2 font-medium"
+    ? "pb-2 pr-2 pt-2 font-medium"
     : "pb-3 pr-4 text-sm font-semibold uppercase tracking-wide";
+
+  const tableHead = (
+    <tr className="bg-slate-50 text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
+      <th className={`${th} pl-3`}>Day</th>
+      <th className={th}>Project</th>
+      <th className={th}>Hours</th>
+      <th className={th} title="Units the trainee completed that day">
+        Units done
+      </th>
+      <th className={th} title="Unit count the trainee should hit in the assigned hours">
+        vs unit goal
+      </th>
+      <th className={th} title="Quality score you enter (0–100)">
+        Quality %
+      </th>
+      {compact ? <th className={`${th} w-24`}> </th> : <th className={th}> </th>}
+    </tr>
+  );
+
+  function renderReadOnlyRow(day: DayOption) {
+    const saved = existing.find((e) => e.dayNumber === day.dayNumber);
+    const cell = compact ? "py-2 pr-2" : "py-3.5 pr-4";
+    return (
+      <tr
+        key={`saved-${day.dayNumber}`}
+        className="border-t border-slate-200 text-slate-700 first:border-t-0 dark:border-slate-800/50 dark:text-slate-300"
+      >
+        {renderDayCell(day, `${cell} pl-3`)}
+        <td className={`${cell} font-medium text-slate-800 dark:text-slate-200`}>
+          {projectLabel(day)}
+        </td>
+        <td className={`${cell} tabular-nums`}>{fmt(saved?.hoursLogged)}</td>
+        <td className={`${cell} tabular-nums`}>{fmt(saved?.productionUnits)}</td>
+        <td className={cell}>
+          <ProductionVsTarget
+            compact={compact}
+            units={saved?.productionUnits ?? null}
+            hoursLogged={saved?.hoursLogged ?? null}
+            target={day.productionTarget}
+            assignedHours={day.assignedHours}
+          />
+        </td>
+        <td className={`${cell} tabular-nums`}>
+          {qualityScoreLabel(saved?.qualityScore)}
+        </td>
+        <td className={cell}>
+          <button
+            type="button"
+            disabled={disabled || savingDay != null}
+            onClick={() => startEdit(day)}
+            title="Edit"
+            className={`inline-flex rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 ${
+              compact ? "p-1.5" : "p-2.5"
+            }`}
+          >
+            <Pencil className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+          </button>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <div
@@ -492,28 +593,34 @@ export function TraineeWorkMetricsForm({
             {submittedRows.length > 0 ? ` · ${submittedRows.length} saved` : ""}
           </p>
         </div>
-        {pendingRows.length === 0 ? (
-          <p className={`text-slate-500 ${compact ? "text-xs" : "text-base"}`}>
-            Nothing pending.
-          </p>
+        {compact ? (
+          allWorkRows.length === 0 ? (
+            <p className="text-xs text-slate-500">No training-work days yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full min-w-[720px] text-left text-xs">
+                <thead>{tableHead}</thead>
+                <tbody>
+                  {allWorkRows.map((day) => {
+                    const saved = existing.find((e) => e.dayNumber === day.dayNumber);
+                    if (!hasSubmittedMetrics(saved) || editingDay === day.dayNumber) {
+                      return renderEditableRow(
+                        day,
+                        editingDay === day.dayNumber ? "edit" : "pending"
+                      );
+                    }
+                    return renderReadOnlyRow(day);
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : pendingRows.length === 0 ? (
+          <p className="text-base text-slate-500">Nothing pending.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-            <table
-              className={`w-full min-w-[640px] text-left ${
-                compact ? "text-xs" : "text-base"
-              }`}
-            >
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
-                  <th className={`${th} pl-3 pt-3`}>Day</th>
-                  <th className={`${th} pt-3`}>Project</th>
-                  <th className={`${th} pt-3`}>Hours</th>
-                  <th className={`${th} pt-3`}>Units</th>
-                  <th className={`${th} pt-3`}>Production</th>
-                  <th className={`${th} pt-3`}>Quality</th>
-                  <th className={`${th} pt-3`}> </th>
-                </tr>
-              </thead>
+            <table className="w-full min-w-[640px] text-left text-base">
+              <thead>{tableHead}</thead>
               <tbody>
                 {pendingRows.map((day) => renderEditableRow(day, "pending"))}
               </tbody>
@@ -522,82 +629,20 @@ export function TraineeWorkMetricsForm({
         )}
       </div>
 
-      {submittedRows.length > 0 && (
+      {!compact && submittedRows.length > 0 && (
         <div>
-          <p
-            className={`mb-2 font-semibold uppercase tracking-wide text-slate-500 ${
-              compact ? "text-[10px]" : "text-sm"
-            }`}
-          >
+          <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Saved
           </p>
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-            <table
-              className={`w-full min-w-[640px] text-left ${
-                compact ? "text-xs" : "text-base"
-              }`}
-            >
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
-                  <th className={`${th} pl-3 pt-3`}>Day</th>
-                  <th className={`${th} pt-3`}>Project</th>
-                  <th className={`${th} pt-3`}>Hours</th>
-                  <th className={`${th} pt-3`}>Units</th>
-                  <th className={`${th} pt-3`}>Production</th>
-                  <th className={`${th} pt-3`}>Quality</th>
-                  <th className={`${th} pt-3`}> </th>
-                </tr>
-              </thead>
+            <table className="w-full min-w-[640px] text-left text-base">
+              <thead>{tableHead}</thead>
               <tbody>
                 {submittedRows.map((day) => {
                   if (editingDay === day.dayNumber) {
                     return renderEditableRow(day, "edit");
                   }
-                  const saved = existing.find(
-                    (e) => e.dayNumber === day.dayNumber
-                  );
-                  const cell = compact ? "py-1 pr-2" : "py-3.5 pr-4";
-                  return (
-                    <tr
-                      key={`submitted-${day.dayNumber}`}
-                      className="border-t border-slate-200 text-slate-700 first:border-t-0 dark:border-slate-800/50 dark:text-slate-300"
-                    >
-                      {renderDayCell(day, `${cell} pl-3`)}
-                      <td className={`${cell} font-medium text-slate-800 dark:text-slate-200`}>
-                        {projectLabel(day)}
-                      </td>
-                      <td className={`${cell} tabular-nums`}>
-                        {fmt(saved?.hoursLogged)}
-                      </td>
-                      <td className={`${cell} tabular-nums`}>
-                        {fmt(saved?.productionUnits)}
-                      </td>
-                      <td className={`${cell} tabular-nums`}>
-                        {formatPercent(
-                          productionScorePercent(
-                            saved?.productionUnits ?? null,
-                            day.productionTarget ?? null
-                          )
-                        )}
-                      </td>
-                      <td className={`${cell} tabular-nums`}>
-                        {qualityScoreLabel(saved?.qualityScore)}
-                      </td>
-                      <td className={cell}>
-                        <button
-                          type="button"
-                          disabled={disabled || savingDay != null}
-                          onClick={() => startEdit(day)}
-                          title="Edit"
-                          className={`inline-flex rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 ${
-                            compact ? "p-1" : "p-2.5"
-                          }`}
-                        >
-                          <Pencil className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
+                  return renderReadOnlyRow(day);
                 })}
               </tbody>
             </table>

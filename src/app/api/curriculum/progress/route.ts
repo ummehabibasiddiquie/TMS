@@ -228,6 +228,14 @@ export async function GET(req: Request) {
             d.workItems?.find(
               (w) => w.productionTarget != null && w.productionTarget > 0
             )?.productionTarget ?? null,
+          assignedHours: (() => {
+            const work = d.workItems?.find(
+              (w) =>
+                (w.productionTarget != null && w.productionTarget > 0) ||
+                (w.assignedHours != null && w.assignedHours > 0)
+            );
+            return work?.assignedHours ?? null;
+          })(),
         })),
       };
     })

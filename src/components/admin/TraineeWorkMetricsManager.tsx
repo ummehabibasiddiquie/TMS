@@ -24,6 +24,7 @@ type DayRow = {
   hasTrainingWork?: boolean;
   due?: { dueDate?: string | null } | null;
   productionTarget?: number | null;
+  assignedHours?: number | null;
 };
 
 type TraineeRow = {
@@ -172,7 +173,24 @@ export function TraineeWorkMetricsManager({
       )}
       {error && <p className="text-sm text-amber-700 dark:text-amber-200">{error}</p>}
 
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+        <strong className="font-medium text-slate-800 dark:text-slate-200">Unit goal</strong> comes
+        from Day Curriculum (e.g.{" "}
+        <strong className="font-medium text-slate-800 dark:text-slate-200">100 units in 2 h</strong>
+        ). Enter actual{" "}
+        <strong className="font-medium text-slate-800 dark:text-slate-200">hours</strong> and{" "}
+        <strong className="font-medium text-slate-800 dark:text-slate-200">units done</strong>; the
+        last column compares units to that goal. Set goals in{" "}
+        <Link
+          href="/admin/curriculum"
+          className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+        >
+          Day Curriculum
+        </Link>
+        .
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_1fr]">
         <aside className="max-h-[min(75vh,720px)] overflow-y-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
           <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
             {rows.map((r) => {
@@ -216,6 +234,7 @@ export function TraineeWorkMetricsManager({
             <p className="text-base text-slate-500">Select a trainee.</p>
           ) : (
             <TraineeWorkMetricsForm
+              compact
               traineeId={selected.id}
               traineeName={selected.name}
               currentDay={Math.max(selected.currentDay, 1)}
@@ -228,6 +247,7 @@ export function TraineeWorkMetricsManager({
                 hasTrainingWork: d.hasTrainingWork,
                 dueDate: d.due?.dueDate ?? null,
                 productionTarget: d.productionTarget ?? null,
+                assignedHours: d.assignedHours ?? null,
               }))}
               practiceProjects={(selected.practiceProjects || []).filter(
                 (p) =>

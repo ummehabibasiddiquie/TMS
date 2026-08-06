@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { formatWorkGoal } from "@/lib/work-metrics-display";
 import {
   Plus,
   Trash2,
@@ -1034,14 +1035,10 @@ export function CurriculumManager() {
                               <p className="font-medium text-slate-900 dark:text-slate-100">
                                 {item.title}
                               </p>
-                              {item.assignedHours != null && (
+                              {formatWorkGoal(item.assignedHours, item.productionTarget) && (
                                 <p className="text-xs font-medium text-amber-900 dark:text-amber-200/90">
-                                  Assigned hours: {item.assignedHours}
-                                </p>
-                              )}
-                              {item.productionTarget != null && (
-                                <p className="text-xs font-medium text-amber-900 dark:text-amber-200/90">
-                                  Production Target: {item.productionTarget} units
+                                  Unit goal:{" "}
+                                  {formatWorkGoal(item.assignedHours, item.productionTarget)}
                                 </p>
                               )}
                               {item.description && (
@@ -1105,7 +1102,7 @@ export function CurriculumManager() {
                           </div>
                           <div>
                             <label className="text-xs text-slate-400">
-                              Production Target (units) *
+                              Unit goal (count) *
                             </label>
                             <input
                               type="number"
@@ -1119,12 +1116,13 @@ export function CurriculumManager() {
                               className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
                             />
                             <p className="mt-1 text-[11px] text-slate-500">
-                              Team Lead and Admin use this to show production as a percentage for trainees.
+                              With assigned hours below: e.g. 2 h and 100 means 100 units should be
+                              done in that 2-hour block (Work Metrics compares units done to this).
                             </p>
                           </div>
                           <div>
                             <label className="text-xs text-slate-400">
-                              Assigned working hours *
+                              Assigned hours for this goal *
                             </label>
                             <input
                               type="number"

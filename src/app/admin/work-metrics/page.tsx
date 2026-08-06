@@ -17,8 +17,10 @@ export default async function AdminWorkMetricsPage({
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
           Work Metrics
         </h1>
-        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
-          Hours · production · quality per training project
+        <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+          Log hours and units the trainee actually did. The unit goal is set in Day Curriculum
+          (example: 2 hours and 100 units means 100 units should be completed in that 2-hour
+          block—not a percentage). Quality is your 0–100 score for that day.
         </p>
       </div>
       <TraineeWorkMetricsManager
