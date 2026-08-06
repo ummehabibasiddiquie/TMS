@@ -446,16 +446,20 @@ export function CurriculumManager() {
             productionTarget: targetNum,
           }
         : { title: newItem.title, description: newItem.description, kind: "CHECKLIST" };
+    if (kind === "WORK" && !newWork.hrmsProjectId.trim()) {
+      setMsg("Select a project for this training work.");
+      return;
+    }
     if (!payload.title.trim()) {
-      if (kind === "WORK") setMsg("Select a project for this training work");
+      if (kind === "WORK") setMsg("Select a project for this training work.");
       return;
     }
     if (kind === "WORK" && (hoursNum == null || hoursNum <= 0)) {
-      setMsg("Enter assigned working hours for this training work.");
+      setMsg("Enter assigned hours for this training work.");
       return;
     }
     if (kind === "WORK" && (targetNum == null || targetNum <= 0)) {
-      setMsg("Enter the production target (expected units) for this training work.");
+      setMsg("Enter the unit goal (expected units) for this training work.");
       return;
     }
     const res = await fetch(`/api/curriculum/${selected.id}/checklist`, {
@@ -588,6 +592,14 @@ export function CurriculumManager() {
           <p className="max-w-md text-xs text-amber-200/90 sm:pb-2">
             When Admin adds extra days, these days are copied to that trainee (cycled if they add more than this template). Leads can edit the
             trainee’s copy afterward without changing this template.
+          </p>
+        ) : !traineeId ? (
+          <p className="max-w-md text-xs text-slate-400 sm:pb-2">
+            Trainees use their own copy of this template. When you add, change, or remove{" "}
+            <strong className="font-medium text-slate-300">training work</strong> on a day here,
+            that day&apos;s work updates for trainees who have{" "}
+            <strong className="font-medium text-slate-300">not finished that day</strong> yet.
+            Completed days stay as they were for that trainee.
           </p>
         ) : null}
         {traineeId && (
@@ -1071,6 +1083,7 @@ export function CurriculumManager() {
                             </label>
                             <select
                               value={newWork.hrmsProjectId}
+                              required
                               onChange={(e) => {
                                 const id = e.target.value;
                                 const p = hrmsProjects.find((x) => x.id === id);
@@ -1108,6 +1121,7 @@ export function CurriculumManager() {
                               type="number"
                               min={1}
                               step={1}
+                              required
                               value={newWork.productionTarget}
                               onChange={(e) =>
                                 setNewWork({ ...newWork, productionTarget: e.target.value })
@@ -1128,6 +1142,7 @@ export function CurriculumManager() {
                               type="number"
                               min={0.5}
                               step={0.5}
+                              required
                               value={newWork.assignedHours}
                               onChange={(e) =>
                                 setNewWork({ ...newWork, assignedHours: e.target.value })
@@ -1147,8 +1162,13 @@ export function CurriculumManager() {
                             />
                             <button
                               type="button"
+                              disabled={
+                                !newWork.hrmsProjectId ||
+                                !newWork.assignedHours.trim() ||
+                                !newWork.productionTarget.trim()
+                              }
                               onClick={() => addChecklistItem("WORK")}
-                              className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-600 px-3 py-2 text-sm hover:bg-amber-500"
+                              className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-600 px-3 py-2 text-sm hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Plus className="h-4 w-4" />
                               Add work

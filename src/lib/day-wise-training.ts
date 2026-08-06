@@ -380,6 +380,102 @@ export async function listCurriculumDays(scopeKey: string) {
 }
 
 /**
+ * Trainees usually have a personal copy of the GLOBAL schedule (from backfill).
+ * When Admin/TL edits training work on the GLOBAL day, push WORK items + project fields
+ * to each trainee's matching day if that day is not fully complete for them yet.
+ */
+export async function syncGlobalDayWorkToTraineeCopies(dayNumber: number) {
+  const n = Math.floor(Number(dayNumber));
+  if (!Number.isFinite(n) || n < 1) return { updated: 0 };
+
+  const globalDay = await prisma.curriculumDay.findFirst({
+    where: { scopeKey: GLOBAL_CURRICULUM_SCOPE, dayNumber: n },
+    include: {
+      checklistItems: {
+        where: { kind: "WORK" },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+  if (!globalDay) return { updated: 0 };
+
+  const personalDays = await prisma.curriculumDay.findMany({
+    where: {
+      dayNumber: n,
+      scopeKey: { notIn: [GLOBAL_CURRICULUM_SCOPE, EXTRA_WEEK_CURRICULUM_SCOPE] },
+    },
+    select: { id: true, scopeKey: true },
+  });
+
+  let updated = 0;
+  for (const pd of personalDays) {
+    const traineeId = pd.scopeKey;
+    const personalDay = await prisma.curriculumDay.findUnique({
+      where: { id: pd.id },
+      include: dayInclude(traineeId),
+    });
+    if (!personalDay) continue;
+
+    const workMetric = prisma.traineeWorkMetric
+      ? await prisma.traineeWorkMetric.findFirst({
+          where: { traineeId, dayNumber: n },
+          select: {
+            hoursLogged: true,
+            productionUnits: true,
+            qualityScore: true,
+            updatedAt: true,
+          },
+        })
+      : null;
+
+    const user = await prisma.user.findUnique({
+      where: { id: traineeId },
+      select: { dateOfJoining: true, createdAt: true },
+    });
+    const trainingStart = resolveTrainingStartDate(
+      user?.dateOfJoining,
+      user?.createdAt
+    );
+    const snapshot = await buildDaySnapshot(
+      traineeId,
+      personalDay,
+      trainingStart,
+      workMetric
+    );
+    if (snapshot.done) continue;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.curriculumChecklistItem.deleteMany({
+        where: { dayId: pd.id, kind: "WORK" },
+      });
+      if (globalDay.checklistItems.length > 0) {
+        await tx.curriculumChecklistItem.createMany({
+          data: globalDay.checklistItems.map((item) => ({
+            dayId: pd.id,
+            title: item.title,
+            description: item.description,
+            kind: "WORK",
+            assignedHours: item.assignedHours,
+            productionTarget: item.productionTarget,
+            sortOrder: item.sortOrder,
+          })),
+        });
+      }
+      await tx.curriculumDay.update({
+        where: { id: pd.id },
+        data: {
+          projectName: globalDay.projectName,
+          hrmsProjectId: globalDay.hrmsProjectId,
+        },
+      });
+    });
+    updated += 1;
+  }
+
+  return { updated };
+}
+
+/**
  * Day-wise plan from GLOBAL default, or trainee-specific copy if customized.
  */
 export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
@@ -674,7 +770,8 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
               title: item.title,
               description: item.description,
               kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
-              assignedHours: "assignedHours" in item ? item.assignedHours ?? null : null,
+              assignedHours: item.assignedHours ?? null,
+              productionTarget: item.productionTarget ?? null,
               sortOrder: item.sortOrder,
             })),
           },

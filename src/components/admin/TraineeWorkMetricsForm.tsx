@@ -115,19 +115,17 @@ function parseUnitsValue(raw: string): number | null {
 
 function ProductionVsTarget({
   units,
-  hoursLogged,
   target,
   assignedHours,
   compact,
 }: {
   units: number | null;
-  hoursLogged?: number | null;
   target: number | null | undefined;
   assignedHours?: number | null;
   compact?: boolean;
 }) {
-  const hint = compact ? "text-[10px]" : "text-xs";
-  const score = compact ? "text-sm font-semibold" : "text-base font-semibold";
+  const hint = compact ? "text-[10px] leading-tight" : "text-xs leading-snug";
+  const score = compact ? "text-sm font-semibold leading-tight" : "text-base font-semibold leading-snug";
   const goal = formatWorkGoal(assignedHours, target);
   if (!goal) {
     return (
@@ -140,16 +138,11 @@ function ProductionVsTarget({
     );
   }
   return (
-    <div className="space-y-0.5">
-      <span className={`${hint} text-slate-500 dark:text-slate-400`}>Goal: {goal}</span>
+    <div className="flex min-w-[7.25rem] max-w-[11rem] flex-col gap-0.5">
       <span className={`${score} tabular-nums text-slate-800 dark:text-slate-200`}>
         {formatUnitsVsGoal(units, target)}
       </span>
-      {hoursLogged != null && hoursLogged > 0 && (
-        <span className={`${hint} tabular-nums text-slate-500 dark:text-slate-400`}>
-          Logged {hoursLogged} h
-        </span>
-      )}
+      <span className={`${hint} text-slate-500 dark:text-slate-400`}>Goal: {goal}</span>
     </div>
   );
 }
@@ -430,15 +423,10 @@ export function TraineeWorkMetricsForm({
             aria-label={`Units completed day ${day.dayNumber}`}
           />
         </td>
-        <td className={cell}>
+        <td className={`${cell} align-top`}>
           <ProductionVsTarget
             compact={compact}
             units={parseUnitsValue(draft.productionUnits)}
-            hoursLogged={
-              draft.hoursLogged.trim() === ""
-                ? null
-                : Number(draft.hoursLogged)
-            }
             target={day.productionTarget}
             assignedHours={day.assignedHours}
           />
@@ -514,7 +502,10 @@ export function TraineeWorkMetricsForm({
       <th className={th} title="Units the trainee completed that day">
         Units done
       </th>
-      <th className={th} title="Unit count the trainee should hit in the assigned hours">
+      <th
+        className={`${th} min-w-[8.5rem]`}
+        title="Unit count the trainee should hit in the assigned hours"
+      >
         vs unit goal
       </th>
       <th className={th} title="Quality score you enter (0–100)">
@@ -538,11 +529,10 @@ export function TraineeWorkMetricsForm({
         </td>
         <td className={`${cell} tabular-nums`}>{fmt(saved?.hoursLogged)}</td>
         <td className={`${cell} tabular-nums`}>{fmt(saved?.productionUnits)}</td>
-        <td className={cell}>
+        <td className={`${cell} align-top`}>
           <ProductionVsTarget
             compact={compact}
             units={saved?.productionUnits ?? null}
-            hoursLogged={saved?.hoursLogged ?? null}
             target={day.productionTarget}
             assignedHours={day.assignedHours}
           />
@@ -598,7 +588,7 @@ export function TraineeWorkMetricsForm({
             <p className="text-xs text-slate-500">No training-work days yet.</p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-              <table className="w-full min-w-[720px] text-left text-xs">
+              <table className="w-full min-w-[760px] text-left text-xs">
                 <thead>{tableHead}</thead>
                 <tbody>
                   {allWorkRows.map((day) => {

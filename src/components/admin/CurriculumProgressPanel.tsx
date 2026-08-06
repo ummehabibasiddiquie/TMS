@@ -23,6 +23,7 @@ type WorkByProject = {
   dayNumber?: number;
   hoursLogged: number | null;
   productionUnits: number | null;
+  productionScorePercent?: number | null;
   entries: number;
   qualityScore: number | null;
   qcSamples: number;
@@ -63,6 +64,7 @@ type Row = {
   workSummary?: {
     hoursLogged: number | null;
     productionUnits: number | null;
+    productionScorePercent: number | null;
     entries: number;
     qualityScore: number | null;
   };
@@ -123,11 +125,37 @@ function fmt(v: number | null | undefined, suffix = "") {
   return `${v}${suffix}`;
 }
 
-function quizClass(score: number | null | undefined) {
+function workPercentClass(score: number | null | undefined) {
   if (score == null) return "text-slate-500";
   if (score >= 90) return "text-emerald-700 dark:text-emerald-300";
   if (score >= 70) return "text-amber-800 dark:text-amber-200";
   return "text-red-700 dark:text-red-300";
+}
+
+function fmtWorkPercent(score: number | null | undefined) {
+  if (score == null || Number.isNaN(Number(score))) return "—";
+  return `${Math.round(Number(score) * 10) / 10}%`;
+}
+
+/** One work score: average of production-vs-goal % and quality % (whichever are logged). */
+function combinedWorkPercent(
+  production: number | null | undefined,
+  quality: number | null | undefined
+): number | null {
+  const parts: number[] = [];
+  if (production != null && Number.isFinite(Number(production))) {
+    parts.push(Number(production));
+  }
+  if (quality != null && Number.isFinite(Number(quality))) {
+    parts.push(Number(quality));
+  }
+  if (parts.length === 0) return null;
+  const avg = parts.reduce((a, b) => a + b, 0) / parts.length;
+  return Math.round(avg * 10) / 10;
+}
+
+function quizClass(score: number | null | undefined) {
+  return workPercentClass(score);
 }
 
 const listShell =
@@ -305,7 +333,13 @@ export function CurriculumProgressPanel() {
   return (
     <section className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Trainee progress</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Trainee progress</h2>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            Learning = curriculum completion. Work = one score (average of production vs unit
+            goal and quality on logged days); breakdown shown under each trainee.
+          </p>
+        </div>
         <div className="flex items-center gap-3 text-sm">
           <Link
             href="/admin/work-metrics"
@@ -361,18 +395,37 @@ export function CurriculumProgressPanel() {
               );
               const workPending = pendingWorkCount(r);
 
-              const productionMain =
-                summary?.productionUnits != null
-                  ? String(summary.productionUnits)
-                  : hasWork || hasProjects
-                    ? "No data"
-                    : "—";
-              const qualityMain =
-                summary?.qualityScore != null
-                  ? `${summary.qualityScore}%`
-                  : hasWork || hasProjects
-                    ? "No data"
-                    : "—";
+              const productionPct = summary?.productionScorePercent ?? null;
+              const qualityPct = summary?.qualityScore ?? null;
+              const workCombinedPct = combinedWorkPercent(productionPct, qualityPct);
+              const workMain = fmtWorkPercent(workCombinedPct);
+              const workBreakdownParts: string[] = [];
+              if (productionPct != null) {
+                workBreakdownParts.push(`Prod ${fmtWorkPercent(productionPct)}`);
+              } else if (hasWork || hasProjects || summary?.entries) {
+                workBreakdownParts.push("Prod —");
+              }
+              if (qualityPct != null) {
+                workBreakdownParts.push(`Qual ${fmtWorkPercent(qualityPct)}`);
+              } else if (hasWork || hasProjects || summary?.entries) {
+                workBreakdownParts.push("Qual —");
+              }
+              const workBreakdown =
+                workBreakdownParts.length > 0 ? workBreakdownParts.join(" · ") : null;
+              const workDetail =
+                summary?.productionUnits != null || summary?.hoursLogged != null
+                  ? [
+                      summary.productionUnits != null
+                        ? `${summary.productionUnits} units`
+                        : null,
+                      summary?.hoursLogged != null ? `${fmt(summary.hoursLogged)}h` : null,
+                      summary?.entries
+                        ? `${summary.entries} day${summary.entries === 1 ? "" : "s"}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : null;
               const quizMain =
                 quiz == null
                   ? "—"
@@ -485,8 +538,8 @@ export function CurriculumProgressPanel() {
                       </span>
                     </button>
 
-                    {/* Metrics — 4 equal columns, fits container (no horizontal scroll) */}
-                    <div className="grid min-w-0 grid-cols-4 gap-2 lg:gap-3">
+                    {/* Metrics — Learning, Work (prod + quality), Quiz */}
+                    <div className="grid min-w-0 grid-cols-3 gap-2 lg:gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                           Learning
@@ -497,18 +550,28 @@ export function CurriculumProgressPanel() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                          Production
+                          Work
                         </p>
                         <p
-                          className={`truncate text-sm font-semibold tabular-nums ${
-                            summary?.productionUnits != null
-                              ? "text-slate-900 dark:text-white"
-                              : "font-normal text-slate-500"
-                          }`}
-                          title={productionMain}
+                          className={`truncate text-sm font-semibold tabular-nums ${workPercentClass(workCombinedPct)}`}
+                          title={
+                            workBreakdown
+                              ? `Combined average: ${workMain} (${workBreakdown})`
+                              : "Average of production vs unit goal and quality on logged days"
+                          }
                         >
-                          {productionMain}
+                          {workMain}
                         </p>
+                        {workBreakdown && (
+                          <p className="truncate text-[10px] tabular-nums text-slate-500">
+                            {workBreakdown}
+                          </p>
+                        )}
+                        {workDetail && (
+                          <p className="truncate text-[10px] tabular-nums text-slate-500">
+                            {workDetail}
+                          </p>
+                        )}
                         {workPending > 0 && (
                           <Link
                             href={`/admin/work-metrics?traineeId=${encodeURIComponent(r.id)}`}
@@ -518,25 +581,6 @@ export function CurriculumProgressPanel() {
                           >
                             {workPending} pending
                           </Link>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                          Quality
-                        </p>
-                        <p
-                          className={`truncate text-sm font-semibold tabular-nums ${
-                            summary?.qualityScore != null
-                              ? "text-slate-900 dark:text-white"
-                              : "font-normal text-slate-500"
-                          }`}
-                        >
-                          {qualityMain}
-                        </p>
-                        {(hasWork || summary?.entries) && (
-                          <p className="truncate text-[10px] tabular-nums text-slate-500">
-                            {fmt(summary?.hoursLogged)}h · {summary?.entries ?? 0}d
-                          </p>
                         )}
                       </div>
                       <div className="min-w-0">

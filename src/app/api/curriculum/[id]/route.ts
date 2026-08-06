@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
+  GLOBAL_CURRICULUM_SCOPE,
   isSharedCurriculumScope,
   assertCanManageTrainee,
+  syncGlobalDayWorkToTraineeCopies,
 } from "@/lib/day-wise-training";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -83,6 +85,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   try {
     const day = await prisma.curriculumDay.update({ where: { id }, data });
+    if (allowed.day.scopeKey === GLOBAL_CURRICULUM_SCOPE) {
+      await syncGlobalDayWorkToTraineeCopies(day.dayNumber);
+    }
     return NextResponse.json({ day });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Update failed";
