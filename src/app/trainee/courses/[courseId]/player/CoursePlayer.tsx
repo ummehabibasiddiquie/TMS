@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
   Check,
-  MessageSquare,
   FileText,
   StickyNote,
   BarChart2,
@@ -161,22 +160,21 @@ type Props = {
   course: { id: string; title: string; modules: { id: string; title: string; lessons: Lesson[] }[] };
   lessons: Lesson[];
   activeLessonId?: string;
+  initialStep?: "content" | "quiz";
   progress: { lessonId: string; completed: boolean; watchPercent: number; quizPassed?: boolean }[];
   passedQuizIds?: string[];
   initialNote: string;
-  discussions: { id: string; content: string; user: { name: string }; createdAt: Date }[];
   enrollmentPercent: number;
-  userId: string;
 };
 
 export function CoursePlayer({
   course,
   lessons,
   activeLessonId,
+  initialStep = "content",
   progress,
   passedQuizIds: initialPassedQuizIds = [],
   initialNote,
-  discussions: initialDiscussions,
   enrollmentPercent,
 }: Props) {
   const router = useRouter();
@@ -186,8 +184,6 @@ export function CoursePlayer({
   );
   const [coursePercent, setCoursePercent] = useState(enrollmentPercent);
   const [note, setNote] = useState(initialNote);
-  const [discussions, setDiscussions] = useState(initialDiscussions);
-  const [newComment, setNewComment] = useState("");
   const [quizResults, setQuizResults] = useState<
     Record<string, { score: number; passed: boolean }>
   >({});
@@ -195,10 +191,22 @@ export function CoursePlayer({
   const [passedQuizIds, setPassedQuizIds] = useState<Set<string>>(
     () => new Set(initialPassedQuizIds)
   );
-  const [rightTab, setRightTab] = useState<"notes" | "progress" | "resources" | "discussion">("notes");
+  const [rightTab, setRightTab] = useState<"notes" | "progress" | "resources">("notes");
   const [expandedModules, setExpandedModules] = useState<Set<string>>(
     new Set(course.modules.map((m) => m.id))
   );
+
+  const [lessonStep, setLessonStep] = useState<"content" | "quiz">(
+    initialStep === "quiz" ? "quiz" : "content"
+  );
+
+  useEffect(() => {
+    if (activeLessonId) setActiveId(activeLessonId);
+  }, [activeLessonId]);
+
+  useEffect(() => {
+    setLessonStep(initialStep === "quiz" ? "quiz" : "content");
+  }, [activeLessonId, initialStep]);
 
   const activeLesson = lessons.find((l) => l.id === activeId);
   const activeIndex = lessons.findIndex((l) => l.id === activeId);
@@ -207,7 +215,7 @@ export function CoursePlayer({
   const lessonQuizzes = activeLesson?.quizzes ?? [];
 
   const updateProgress = useCallback(
-    async (data: Record<string, unknown>) => {
+    async (data: Record<string, unknown>, opts?: { skipRefresh?: boolean }) => {
       if (!activeLesson) return;
       const res = await fetch("/api/progress", {
         method: "POST",
@@ -226,7 +234,7 @@ export function CoursePlayer({
         }));
       }
       if (json.courseProgress !== undefined) setCoursePercent(json.courseProgress);
-      router.refresh();
+      if (!opts?.skipRefresh) router.refresh();
     },
     [activeLesson, course.id, router]
   );
@@ -236,16 +244,33 @@ export function CoursePlayer({
     const quizzes = activeLesson.quizzes ?? [];
     const allPassed =
       quizzes.length === 0 || quizzes.every((q) => passedQuizIds.has(q.id));
-    // Content + quizzes: first mark content done (unlock quizzes). Stay on lesson for the quiz.
     if (quizzes.length > 0 && !allPassed) {
       await updateProgress({ completed: false, watchPercent: 100 });
+      navigateLesson(activeLesson.id, "quiz");
       return;
     }
-    await updateProgress({ completed: true, watchPercent: 100 });
-    // Fully done — move to the next lesson (or back to courses if this was the last)
     if (nextLesson) {
-      navigateLesson(nextLesson.id);
-    } else {
+      navigateLesson(nextLesson.id, "content");
+    }
+    await updateProgress(
+      { completed: true, watchPercent: 100 },
+      { skipRefresh: Boolean(nextLesson) }
+    );
+    if (!nextLesson) {
+      router.push("/trainee/training");
+    }
+  }
+
+  async function markAssignmentComplete() {
+    if (!activeLesson) return;
+    if (nextLesson) {
+      navigateLesson(nextLesson.id, "content");
+    }
+    await updateProgress(
+      { assignmentDone: true, completed: true },
+      { skipRefresh: Boolean(nextLesson) }
+    );
+    if (!nextLesson) {
       router.push("/trainee/training");
     }
   }
@@ -257,18 +282,6 @@ export function CoursePlayer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lessonId: activeLesson.id, content: note }),
     });
-  }
-
-  async function postComment() {
-    if (!activeLesson || !newComment.trim()) return;
-    const res = await fetch("/api/discussions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lessonId: activeLesson.id, content: newComment }),
-    });
-    const { comment } = await res.json();
-    setDiscussions((d) => [comment, ...d]);
-    setNewComment("");
   }
 
   async function submitQuiz(quizId: string, answers: Record<string, string>) {
@@ -307,7 +320,7 @@ export function CoursePlayer({
       if (data.courseProgress !== undefined) setCoursePercent(data.courseProgress);
       if (data.allPassed) {
         if (nextLesson) {
-          navigateLesson(nextLesson.id);
+          navigateLesson(nextLesson.id, "content");
         } else {
           router.push("/trainee/training");
         }
@@ -319,9 +332,19 @@ export function CoursePlayer({
     }
   }
 
-  function navigateLesson(id: string) {
+  function navigateLesson(id: string, step: "content" | "quiz" = "content") {
     setActiveId(id);
-    router.push(`/trainee/courses/${course.id}/player?lesson=${id}`);
+    setLessonStep(step);
+    const params = new URLSearchParams({ lesson: id });
+    if (step === "quiz") params.set("step", "quiz");
+    router.push(`/trainee/courses/${course.id}/player?${params.toString()}`);
+  }
+
+  function isQuizUnlockedForLesson(lesson: Lesson, prog?: { watchPercent?: number }) {
+    const quizzes = lesson.quizzes ?? [];
+    if (quizzes.length === 0) return false;
+    if (lesson.lessonType === "QUIZ") return true;
+    return (prog?.watchPercent ?? 0) > 0;
   }
 
   if (!activeLesson) return <p>No lessons in this course.</p>;
@@ -335,13 +358,18 @@ export function CoursePlayer({
   const contentDone =
     activeLesson.lessonType === "QUIZ" || (lp?.watchPercent ?? 0) >= 90;
   const quizUnlocked =
-    hasQuiz && (activeLesson.lessonType === "QUIZ" || (lp?.watchPercent ?? 0) > 0);
+    hasQuiz && isQuizUnlockedForLesson(activeLesson, lp);
+  const showQuizOnly = lessonStep === "quiz" && quizUnlocked && hasQuiz;
+  const showContent = !showQuizOnly;
+
   const markLabel =
     hasQuiz && !allQuizzesPassed
-      ? contentDone
-        ? `Complete ${lessonQuizzes.length} quiz${lessonQuizzes.length !== 1 ? "zes" : ""} below`
-        : "Mark Content Complete"
-      : "Mark Complete";
+      ? showQuizOnly
+        ? "Pass quiz to continue"
+        : contentDone
+          ? "Continue to quiz"
+          : "Mark content complete"
+      : "Mark complete";
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -379,13 +407,19 @@ export function CoursePlayer({
                 <ul className="ml-2 space-y-1 border-l border-slate-300 dark:border-slate-700 pl-2">
                   {mod.lessons.map((lesson) => {
                     const p = localProgress[lesson.id];
+                    const lessonHasQuiz = (lesson.quizzes?.length ?? 0) > 0;
+                    const quizOpen = isQuizUnlockedForLesson(lesson, p);
+                    const isActiveContent =
+                      activeId === lesson.id && lessonStep === "content";
+                    const isActiveQuiz =
+                      activeId === lesson.id && lessonStep === "quiz";
                     return (
-                      <li key={lesson.id}>
+                      <li key={lesson.id} className="space-y-1">
                         <button
-                          onClick={() => navigateLesson(lesson.id)}
+                          onClick={() => navigateLesson(lesson.id, "content")}
                           className={cn(
                             "w-full rounded-lg px-2 py-2 text-left text-xs transition",
-                            activeId === lesson.id
+                            isActiveContent
                               ? "bg-blue-600/30 text-blue-700 dark:text-blue-200"
                               : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50"
                           )}
@@ -395,15 +429,27 @@ export function CoursePlayer({
                               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                             )}
                             {lesson.title}
-                            {(lesson.quizzes?.length ?? 0) > 0 && (
-                              <span className="ml-auto rounded bg-violet-600/20 px-1 text-[10px] text-violet-700 dark:text-violet-300">
-                                {lesson.quizzes!.length > 1
-                                  ? `${lesson.quizzes!.length} Quizzes`
-                                  : "Quiz"}
-                              </span>
-                            )}
                           </span>
                         </button>
+                        {lessonHasQuiz && (
+                          <button
+                            type="button"
+                            disabled={!quizOpen}
+                            onClick={() => navigateLesson(lesson.id, "quiz")}
+                            className={cn(
+                              "ml-3 w-[calc(100%-0.75rem)] rounded-lg px-2 py-1.5 text-left text-[11px] transition",
+                              !quizOpen && "cursor-not-allowed opacity-50",
+                              isActiveQuiz
+                                ? "bg-violet-600/20 font-medium text-violet-800 dark:text-violet-200"
+                                : "text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30"
+                            )}
+                          >
+                            Quiz
+                            {lesson.quizzes!.length > 1
+                              ? ` (${lesson.quizzes!.length})`
+                              : ""}
+                          </button>
+                        )}
                       </li>
                     );
                   })}
@@ -416,17 +462,25 @@ export function CoursePlayer({
         {/* Center: Content */}
         <div className="glass-panel flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6">
-            <h2 className="text-2xl font-bold">{activeLesson.title}</h2>
-            <p className="text-sm text-slate-500">{activeLesson.moduleTitle}</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              {showQuizOnly
+                ? lessonQuizzes.length > 1
+                  ? "Lesson quizzes"
+                  : "Lesson quiz"
+                : activeLesson.title}
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {showQuizOnly ? activeLesson.title : activeLesson.moduleTitle}
+            </p>
 
-            {activeLesson.lessonType === "ASSIGNMENT" && activeLesson.assignment && (
+            {showContent && activeLesson.lessonType === "ASSIGNMENT" && activeLesson.assignment && (
               <div className="mt-6 rounded-xl bg-slate-800/40 p-6">
                 <h3 className="font-semibold">{activeLesson.assignment.title}</h3>
                 <p className="mt-2 text-slate-400">
                   {activeLesson.assignment.instructions}
                 </p>
                 <button
-                  onClick={() => updateProgress({ assignmentDone: true, completed: true })}
+                  onClick={() => void markAssignmentComplete()}
                   className="mt-4 rounded-xl bg-blue-600 px-6 py-2"
                 >
                   Mark Assignment Complete
@@ -434,9 +488,10 @@ export function CoursePlayer({
               </div>
             )}
 
-            {(activeLesson.lessonType === "CONTENT" ||
-              (activeLesson.lessonType !== "QUIZ" &&
-                activeLesson.lessonType !== "ASSIGNMENT")) && (
+            {showContent &&
+              (activeLesson.lessonType === "CONTENT" ||
+                (activeLesson.lessonType !== "QUIZ" &&
+                  activeLesson.lessonType !== "ASSIGNMENT")) && (
               <div className="mt-6 space-y-6">
                 {activeLesson.topics.length === 0 ? (
                   <p className="text-sm text-slate-400">
@@ -484,29 +539,23 @@ export function CoursePlayer({
               </div>
             )}
 
-            {hasQuiz && !quizUnlocked && (
-              <div className="mt-8 rounded-xl border border-dashed border-violet-500/40 bg-violet-950/20 p-6 text-center">
-                <p className="font-medium text-violet-200">
+            {showContent && hasQuiz && !quizUnlocked && (
+              <div className="mt-8 rounded-xl border border-dashed border-violet-300 bg-violet-50 p-6 text-center dark:border-violet-500/40 dark:bg-violet-950/20">
+                <p className="font-semibold text-violet-900 dark:font-medium dark:text-violet-200">
                   {lessonQuizzes.length > 1 ? "Quizzes locked" : "Quiz locked"}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Finish <span className="text-slate-200">{activeLesson.title}</span>{" "}
-                  content first. Only this lesson&apos;s quiz unlocks here — not
-                  quizzes from other lessons.
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  Finish this lesson&apos;s content first, then use{" "}
+                  <span className="font-medium text-slate-900 dark:text-slate-200">
+                    Continue to quiz
+                  </span>{" "}
+                  or open <span className="font-medium">Quiz</span> in the sidebar.
                 </p>
               </div>
             )}
 
-            {quizUnlocked && (
-              <div className="mt-8 space-y-6 border-t border-slate-700 pt-8">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Lesson quiz
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Complete each quiz for this lesson. Questions appear one at a time.
-                  </p>
-                </div>
+            {showQuizOnly && (
+              <div className="mt-6 space-y-6">
                 {lessonQuizzes.map((quiz, qi) => {
                   const passed = passedQuizIds.has(quiz.id);
                   const result = quizResults[quiz.id] ?? null;
@@ -534,29 +583,51 @@ export function CoursePlayer({
           </div>
 
           {/* Bottom bar */}
-          <div className="flex items-center justify-between border-t border-slate-700 px-6 py-4">
+          <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
             <button
-              disabled={!prevLesson}
-              onClick={() => prevLesson && navigateLesson(prevLesson.id)}
-              className="flex items-center gap-1 rounded-xl px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-30"
+              disabled={showQuizOnly ? false : !prevLesson}
+              onClick={() => {
+                if (showQuizOnly) {
+                  navigateLesson(activeLesson.id, "content");
+                  return;
+                }
+                if (prevLesson) navigateLesson(prevLesson.id, "content");
+              }}
+              className="flex items-center gap-1 rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <ChevronLeft className="h-4 w-4" />
-              Previous
+              {showQuizOnly ? "Back to lesson" : "Previous"}
             </button>
             <button
               onClick={markComplete}
-              disabled={hasQuiz && contentDone && !allQuizzesPassed}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2 text-sm font-medium hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={showQuizOnly}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Check className="h-4 w-4" />
               {markLabel}
             </button>
             <button
-              disabled={!nextLesson}
-              onClick={() => nextLesson && navigateLesson(nextLesson.id)}
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-30"
+              disabled={
+                showQuizOnly
+                  ? !allQuizzesPassed || !nextLesson
+                  : hasQuiz && quizUnlocked && !allQuizzesPassed
+                    ? false
+                    : !nextLesson
+              }
+              onClick={() => {
+                if (!showQuizOnly && hasQuiz && quizUnlocked && !allQuizzesPassed) {
+                  navigateLesson(activeLesson.id, "quiz");
+                  return;
+                }
+                if (nextLesson) navigateLesson(nextLesson.id, "content");
+              }}
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              Next
+              {showQuizOnly
+                ? "Next lesson"
+                : hasQuiz && quizUnlocked && !allQuizzesPassed
+                  ? "Go to quiz"
+                  : "Next"}
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -570,7 +641,6 @@ export function CoursePlayer({
                 ["notes", StickyNote, "Notes"],
                 ["progress", BarChart2, "Progress"],
                 ["resources", FileText, "Resources"],
-                ["discussion", MessageSquare, "Chat"],
               ] as const
             ).map(([key, Icon, label]) => (
               <button
@@ -623,29 +693,6 @@ export function CoursePlayer({
                   </li>
                 ))}
               </ul>
-            )}
-            {rightTab === "discussion" && (
-              <div className="space-y-3">
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800/50 p-2 text-sm"
-                  placeholder="Add a comment..."
-                  rows={2}
-                />
-                <button
-                  onClick={postComment}
-                  className="w-full rounded-xl bg-blue-600 py-2 text-sm"
-                >
-                  Post
-                </button>
-                {discussions.map((d) => (
-                  <div key={d.id} className="rounded-lg bg-slate-800/40 p-3 text-sm">
-                    <p className="font-medium text-blue-300">{d.user.name}</p>
-                    <p className="text-slate-300">{d.content}</p>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         </aside>

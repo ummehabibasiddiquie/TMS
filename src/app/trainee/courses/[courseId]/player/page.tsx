@@ -8,7 +8,7 @@ export default async function CoursePlayerPage({
   searchParams,
 }: {
   params: { courseId: string };
-  searchParams: { lesson?: string };
+  searchParams: { lesson?: string; step?: string };
 }) {
   const user = await getSession();
   if (!user) return null;
@@ -48,7 +48,7 @@ export default async function CoursePlayerPage({
 
   const allQuizIds = allLessons.flatMap((l) => l.quizzes.map((q) => q.id));
 
-  const [progress, note, discussions, enrollment, passedAttempts] = await Promise.all([
+  const [progress, note, enrollment, passedAttempts] = await Promise.all([
     prisma.lessonProgress.findMany({
       where: {
         userId: user.id,
@@ -62,14 +62,6 @@ export default async function CoursePlayerPage({
           },
         })
       : null,
-    activeLesson
-      ? prisma.discussionComment.findMany({
-          where: { lessonId: activeLesson.id },
-          include: { user: { select: { name: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 20,
-        })
-      : [],
     prisma.enrollment.findUnique({
       where: {
         userId_courseId: { userId: user.id, courseId: course.id },
@@ -109,12 +101,11 @@ export default async function CoursePlayerPage({
       }}
       lessons={allLessons}
       activeLessonId={activeLesson?.id}
+      initialStep={searchParams.step === "quiz" ? "quiz" : "content"}
       progress={progress}
       passedQuizIds={passedQuizIds}
       initialNote={note?.content ?? ""}
-      discussions={discussions}
       enrollmentPercent={enrollment?.progressPercent ?? 0}
-      userId={user.id}
     />
   );
 }
