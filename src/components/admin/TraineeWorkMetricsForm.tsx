@@ -95,10 +95,10 @@ function hasSubmittedMetrics(row?: Existing | null) {
 
 function toDraft(row?: Existing | null): Draft {
   return {
-    hoursLogged: row?.hoursLogged != null ? String(row.hoursLogged) : "0",
+    hoursLogged: row?.hoursLogged != null ? String(row.hoursLogged) : "",
     productionUnits:
-      row?.productionUnits != null ? String(row.productionUnits) : "0",
-    qualityScore: row?.qualityScore != null ? String(row.qualityScore) : "0",
+      row?.productionUnits != null ? String(row.productionUnits) : "",
+    qualityScore: row?.qualityScore != null ? String(row.qualityScore) : "",
   };
 }
 
@@ -401,6 +401,7 @@ export function TraineeWorkMetricsForm({
             min={0}
             step="0.1"
             value={draft.hoursLogged}
+            placeholder="—"
             disabled={disabled || busy}
             onChange={(e) =>
               updateDraft(day.dayNumber, "hoursLogged", e.target.value)
@@ -415,6 +416,7 @@ export function TraineeWorkMetricsForm({
             min={0}
             step="0.1"
             value={draft.productionUnits}
+            placeholder="—"
             disabled={disabled || busy}
             onChange={(e) =>
               updateDraft(day.dayNumber, "productionUnits", e.target.value)
@@ -438,6 +440,7 @@ export function TraineeWorkMetricsForm({
             max={100}
             step="0.1"
             value={draft.qualityScore}
+            placeholder="—"
             disabled={disabled || busy}
             onChange={(e) =>
               updateDraft(day.dayNumber, "qualityScore", e.target.value)
