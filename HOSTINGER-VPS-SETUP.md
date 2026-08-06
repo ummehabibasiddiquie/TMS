@@ -513,11 +513,21 @@ You should see **`tfshrms.cloud`** (HRMS) and **`tms.tfshrms.cloud`** (TMS) as *
    git fetch origin
    git checkout main
    git pull origin main
+   bash scripts/vps-deploy.sh
+   ```
+
+   Or step by step:
+
+   ```bash
+   cd ~/tms
+   git pull origin main
    npm install
    npm run db:migrate:deploy
    npm run build
    pm2 restart tms
    ```
+
+   **Do not skip `npm run build`.** Without a fresh build, the app often serves HTML but **no CSS/JS** (broken layout).
 
 4. Verify **https://tms.tfshrms.cloud**.
 
@@ -535,6 +545,7 @@ You should see **`tfshrms.cloud`** (HRMS) and **`tms.tfshrms.cloud`** (TMS) as *
 | HTTP **301** to HTTPS but wrong page on HTTPS | Fix **443** block: `proxy_pass` + correct `ssl_certificate` for `tms.tfshrms.cloud` |
 | **curl (60) SSL** hostname mismatch | `certbot --nginx -d tms.tfshrms.cloud` → option **1** reinstall |
 | **502 Bad Gateway** | `pm2 list` → `tms` online; Nginx port = PM2 `PORT` |
+| **Page looks like plain HTML** (stacked links, no sidebar/Tailwind) | **`git pull` alone is not enough.** Run `npm install`, **`npm run build`**, then **`pm2 restart tms`**. Or: `bash scripts/vps-deploy.sh`. In browser DevTools → Network, `/_next/static/css/*.css` must be **200**, not 404. |
 | Wrong password-reset links | `BASE_URL=https://tms.tfshrms.cloud` in `.env` |
 
 ---

@@ -3,17 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  CalendarPlus,
   ChevronDown,
   ExternalLink,
   ArrowRightCircle,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { SectionLoader, WorkingBanner } from "@/components/ui/SectionLoader";
 import { ProgressBandBadge } from "@/components/learning/ProgressBandBadge";
 import { dueBadgeClass, type DayDueInfo, type DueSummary } from "@/lib/day-due";
-import { formatDisplayDate, formatDisplayDateTime } from "@/lib/format-date";
 import { formatCertActionBy } from "@/lib/cert-reviewer";
+import { formatDisplayDate } from "@/lib/format-date";
 
 type PracticeProject = { id: string; name: string; dayNumber?: number };
 
@@ -23,6 +23,7 @@ type WorkByProject = {
   dayNumber?: number;
   hoursLogged: number | null;
   productionUnits: number | null;
+  productionTarget?: number | null;
   productionScorePercent?: number | null;
   entries: number;
   qualityScore: number | null;
@@ -41,6 +42,8 @@ type DayDueRow = {
   projectName?: string | null;
   hrmsProjectId?: string | null;
   hasTrainingWork?: boolean;
+  productionTarget?: number | null;
+  assignedHours?: number | null;
 };
 
 type Row = {
@@ -64,9 +67,15 @@ type Row = {
   workSummary?: {
     hoursLogged: number | null;
     productionUnits: number | null;
+    productionTargetUnits?: number | null;
     productionScorePercent: number | null;
+    workOverallPercent: number | null;
+    workDaysExpected: number;
+    workDaysDueThroughToday?: number;
+    workDaysLogged: number;
     entries: number;
     qualityScore: number | null;
+    qualityScoreLoggedAvg?: number | null;
   };
   workMeta?: { configured?: boolean; connected?: boolean; message?: string };
   finalQuizScore?: number | null;
@@ -137,23 +146,6 @@ function fmtWorkPercent(score: number | null | undefined) {
   return `${Math.round(Number(score) * 10) / 10}%`;
 }
 
-/** One work score: average of production-vs-goal % and quality % (whichever are logged). */
-function combinedWorkPercent(
-  production: number | null | undefined,
-  quality: number | null | undefined
-): number | null {
-  const parts: number[] = [];
-  if (production != null && Number.isFinite(Number(production))) {
-    parts.push(Number(production));
-  }
-  if (quality != null && Number.isFinite(Number(quality))) {
-    parts.push(Number(quality));
-  }
-  if (parts.length === 0) return null;
-  const avg = parts.reduce((a, b) => a + b, 0) / parts.length;
-  return Math.round(avg * 10) / 10;
-}
-
 function quizClass(score: number | null | undefined) {
   return workPercentClass(score);
 }
@@ -195,6 +187,127 @@ function pendingWorkCount(r: Row) {
     if (!submitted.has(day)) n += 1;
   }
   return n;
+}
+
+function isScheduleWorkDay(d: DayDueRow) {
+  return Boolean(d.hasTrainingWork || d.hrmsProjectId || d.projectName?.trim());
+}
+
+function workMetricLogged(w?: WorkByProject | null) {
+  if (!w) return false;
+  return (
+    w.hoursLogged != null ||
+    w.productionUnits != null ||
+    w.qualityScore != null
+  );
+}
+
+function trainingWorkDayLines(r: Row) {
+  const metricsByDay = new Map<number, WorkByProject>();
+  for (const w of r.workByProject || []) {
+    if (w.dayNumber != null) metricsByDay.set(w.dayNumber, w);
+  }
+  const seen = new Set<number>();
+  const rows: { dayNumber: number; label: string; detail: string; status?: string }[] =
+    [];
+
+  for (const d of (r.days || []).slice().sort((a, b) => a.dayNumber - b.dayNumber)) {
+    if (!isScheduleWorkDay(d)) continue;
+    seen.add(d.dayNumber);
+    const m = metricsByDay.get(d.dayNumber);
+    const project =
+      d.projectName?.trim() ||
+      m?.projectName?.trim() ||
+      d.title ||
+      `Day ${d.dayNumber}`;
+    rows.push(formatWorkDayLine(r.currentDay, d.dayNumber, project, d, m));
+  }
+  for (const p of r.practiceProjects || []) {
+    if (p.dayNumber == null || seen.has(p.dayNumber)) continue;
+    const d = (r.days || []).find((x) => x.dayNumber === p.dayNumber);
+    if (d && !isScheduleWorkDay(d)) continue;
+    seen.add(p.dayNumber);
+    const m = metricsByDay.get(p.dayNumber);
+    rows.push(
+      formatWorkDayLine(r.currentDay, p.dayNumber, p.name, d, m)
+    );
+  }
+  return rows.sort((a, b) => a.dayNumber - b.dayNumber);
+}
+
+function fmtProdRatio(
+  achieved: number | null | undefined,
+  target: number | null | undefined
+): string {
+  const goal =
+    target != null && Number.isFinite(target) && target > 0
+      ? Math.round(target)
+      : null;
+  if (goal == null) return "—";
+  const done =
+    achieved != null && Number.isFinite(achieved) ? Math.round(achieved) : 0;
+  return `${done}/${goal}`;
+}
+
+function fmtUnitsAchievedTarget(
+  achieved: number | null | undefined,
+  target: number | null | undefined
+): string | null {
+  const goal =
+    target != null && Number.isFinite(target) && target > 0
+      ? Math.round(target)
+      : null;
+  if (goal == null) {
+    if (achieved != null && Number.isFinite(achieved)) return `${achieved} units`;
+    return null;
+  }
+  const done =
+    achieved != null && Number.isFinite(achieved) ? Math.round(achieved) : 0;
+  return `${done}/${goal} units`;
+}
+
+function formatWorkDayLine(
+  currentDay: number,
+  dayNumber: number,
+  project: string,
+  day: DayDueRow | undefined,
+  m: WorkByProject | undefined
+): { dayNumber: number; label: string; detail: string; status?: string } {
+  const target =
+    m?.productionTarget ??
+    day?.productionTarget ??
+    null;
+
+  if (dayNumber > currentDay) {
+    const ratio = fmtProdRatio(null, target);
+    return {
+      dayNumber,
+      label: `Day ${dayNumber} · ${project}`,
+      detail: ratio !== "—" ? `${ratio} · upcoming` : "Upcoming",
+      status: "upcoming",
+    };
+  }
+  if (!workMetricLogged(m)) {
+    const ratio = fmtProdRatio(0, target);
+    return {
+      dayNumber,
+      label: `Day ${dayNumber} · ${project}`,
+      detail: ratio !== "—" ? ratio : "Pending",
+      status: "pending",
+    };
+  }
+
+  const parts: string[] = [];
+  const ratio = fmtProdRatio(m?.productionUnits ?? null, target);
+  if (ratio !== "—") parts.push(ratio);
+  if (m?.qualityScore != null) parts.push(`${m.qualityScore}% Q`);
+
+  return {
+    dayNumber,
+    label: `Day ${dayNumber} · ${project}`,
+    detail: parts.length > 0 ? parts.join(" · ") : "Logged",
+    status: "done",
+  };
 }
 
 /**
@@ -277,22 +390,19 @@ export function CurriculumProgressPanel() {
     }
   }
 
-  async function promoteDay(
+  async function promoteToNextDay(
     traineeId: string,
     name: string,
     totalDays: number,
     currentDay: number
   ) {
-    const raw = prompt(
-      `Open which day for ${name}? (1–${totalDays})`,
-      String(Math.min(totalDays, currentDay + 1))
-    );
-    if (raw == null) return;
-    const dayNumber = Number(raw.trim());
-    if (!Number.isFinite(dayNumber) || dayNumber < 1 || dayNumber > totalDays) {
-      setMsg(`Enter a day between 1 and ${totalDays}`);
+    if (currentDay >= totalDays) {
+      setMsg(`${name} is already on the last day (Day ${totalDays}). Use + Extra days to extend.`);
       return;
     }
+    const dayNumber = currentDay + 1;
+    if (!confirm(`Open Day ${dayNumber} for ${name}?`)) return;
+
     setBusyId(traineeId);
     setBusyLabel(`Opening Day ${dayNumber} for ${name}…`);
     setMsg("");
@@ -336,8 +446,8 @@ export function CurriculumProgressPanel() {
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Trainee progress</h2>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-            Learning = curriculum completion. Work = one score (average of production vs unit
-            goal and quality on logged days); breakdown shown under each trainee.
+            Learning = curriculum completion. Work = one score (average of production vs unit goal
+            and quality on logged days); breakdown shown under each trainee.
           </p>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -374,18 +484,13 @@ export function CurriculumProgressPanel() {
               const open = expanded === r.id;
               const learning = r.learningPercent ?? r.overallPercent;
               const projects = r.practiceProjects || [];
+              const hasProjects = projects.length > 0;
               const work = r.workByProject || [];
               const summary = r.workSummary;
               const busy = busyId === r.id;
               const quiz = r.finalQuizScore;
               const displayQuizScore =
                 quiz != null ? quiz : r.quizRetakePending ? r.lastFinalQuizScore : null;
-              const hasWork = work.length > 0;
-              const hasProjects = projects.length > 0;
-              const extra =
-                r.plannedDays != null && r.totalDays > r.plannedDays
-                  ? r.totalDays - r.plannedDays
-                  : 0;
               const due = r.dueSummary;
               const delayedDays = (r.days || []).filter(
                 (d) =>
@@ -394,38 +499,56 @@ export function CurriculumProgressPanel() {
                   d.due?.status === "DUE_TODAY"
               );
               const workPending = pendingWorkCount(r);
+              const workDayLines = trainingWorkDayLines(r);
 
-              const productionPct = summary?.productionScorePercent ?? null;
-              const qualityPct = summary?.qualityScore ?? null;
-              const workCombinedPct = combinedWorkPercent(productionPct, qualityPct);
+              const qualityLoggedAvg =
+                summary?.qualityScoreLoggedAvg ??
+                (() => {
+                  let s = 0;
+                  let n = 0;
+                  for (const w of work) {
+                    if (w.qualityScore != null) {
+                      s += w.qualityScore;
+                      n += 1;
+                    }
+                  }
+                  return n > 0 ? Math.round((s / n) * 10) / 10 : null;
+                })();
+              const totalUnits = summary?.productionUnits;
+              const targetUnits = summary?.productionTargetUnits ?? null;
+              const workCombinedPct = summary?.workOverallPercent ?? null;
               const workMain = fmtWorkPercent(workCombinedPct);
+
+              const prodRatio = fmtProdRatio(
+                totalUnits ?? (targetUnits != null ? 0 : null),
+                targetUnits
+              );
+              const workTotalsParts: string[] = [];
+              if (totalUnits != null) workTotalsParts.push(`${totalUnits} units`);
+              if (summary?.hoursLogged != null) {
+                workTotalsParts.push(`${fmt(summary.hoursLogged)}h`);
+              }
+              const loggedDays = summary?.workDaysLogged ?? summary?.entries ?? 0;
+              if (loggedDays > 0) {
+                workTotalsParts.push(`${loggedDays} day${loggedDays === 1 ? "" : "s"}`);
+              }
+              const workDetail =
+                workTotalsParts.length > 0 ? workTotalsParts.join(" · ") : null;
+
               const workBreakdownParts: string[] = [];
-              if (productionPct != null) {
-                workBreakdownParts.push(`Prod ${fmtWorkPercent(productionPct)}`);
-              } else if (hasWork || hasProjects || summary?.entries) {
+              if (prodRatio !== "—") {
+                workBreakdownParts.push(`Prod ${prodRatio}`);
+              } else if ((summary?.workDaysExpected ?? 0) > 0 || work.length > 0) {
                 workBreakdownParts.push("Prod —");
               }
-              if (qualityPct != null) {
-                workBreakdownParts.push(`Qual ${fmtWorkPercent(qualityPct)}`);
-              } else if (hasWork || hasProjects || summary?.entries) {
+              if (qualityLoggedAvg != null) {
+                workBreakdownParts.push(`Qual ${fmtWorkPercent(qualityLoggedAvg)}`);
+              } else if ((summary?.workDaysExpected ?? 0) > 0 || work.length > 0) {
                 workBreakdownParts.push("Qual —");
               }
               const workBreakdown =
                 workBreakdownParts.length > 0 ? workBreakdownParts.join(" · ") : null;
-              const workDetail =
-                summary?.productionUnits != null || summary?.hoursLogged != null
-                  ? [
-                      summary.productionUnits != null
-                        ? `${summary.productionUnits} units`
-                        : null,
-                      summary?.hoursLogged != null ? `${fmt(summary.hoursLogged)}h` : null,
-                      summary?.entries
-                        ? `${summary.entries} day${summary.entries === 1 ? "" : "s"}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                  : null;
+
               const quizMain =
                 quiz == null
                   ? "—"
@@ -449,7 +572,6 @@ export function CurriculumProgressPanel() {
               return (
                 <li key={r.id} className="min-w-0 bg-white dark:bg-slate-950/40">
                   <div className="grid grid-cols-1 items-start gap-3 px-4 py-3.5 sm:px-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)_auto] lg:items-center lg:gap-4">
-                    {/* Identity */}
                     <button
                       type="button"
                       disabled={!!busyId}
@@ -492,35 +614,17 @@ export function CurriculumProgressPanel() {
                             Day {r.currentDay}
                             {r.totalDays > 0 ? `/${r.totalDays}` : ""}
                           </span>
-                          {extra > 0 && (
-                            <span className="text-amber-800 dark:text-amber-300/90">+{extra} Extra</span>
+                          {r.isCustom && (
+                            <span className="text-slate-500 dark:text-slate-600">Custom</span>
                           )}
-                          {r.forcedDay != null && (
-                            <span className="text-sky-800 dark:text-sky-300/90">Day Set</span>
-                          )}
-                          {r.isCustom && <span className="text-slate-500 dark:text-slate-600">Custom</span>}
                           {r.scheduleComplete && (
-                            <span className="text-emerald-700 dark:text-emerald-400/90">Schedule Done</span>
-                          )}
-                          {r.finalQuizCertificateStatus === "PENDING_REVIEW" && quiz != null && (
-                            <span className="text-amber-800 dark:text-amber-300">Certificate pending review</span>
+                            <span className="text-emerald-700 dark:text-emerald-400/90">
+                              Schedule Done
+                            </span>
                           )}
                           {r.trainingStart && (
                             <span className="text-slate-500 dark:text-slate-600">
                               Joined {formatDisplayDate(r.trainingStart)}
-                            </span>
-                          )}
-                          {due && due.overdueCount > 0 && (
-                            <span className="text-red-700 dark:text-red-300">
-                              {due.overdueCount} Overdue
-                              {due.maxOverdueDays > 0
-                                ? ` (max ${due.maxOverdueDays}d)`
-                                : ""}
-                            </span>
-                          )}
-                          {due && due.dueTodayCount > 0 && (
-                            <span className="text-amber-800 dark:text-amber-200">
-                              {due.dueTodayCount} due today
                             </span>
                           )}
                           {due && due.doneLateCount > 0 && (
@@ -528,8 +632,22 @@ export function CurriculumProgressPanel() {
                               {due.doneLateCount} done late
                             </span>
                           )}
+                          {r.finalQuizCertificateStatus === "PENDING_REVIEW" &&
+                            quiz != null && (
+                              <span className="text-amber-800 dark:text-amber-300">
+                                Cert pending
+                              </span>
+                            )}
+                          {due && due.overdueCount > 0 && (
+                            <span className="text-red-700 dark:text-red-300">Overdue</span>
+                          )}
+                          {due && due.dueTodayCount > 0 && due.overdueCount === 0 && (
+                            <span className="text-amber-800 dark:text-amber-200">
+                              Due today
+                            </span>
+                          )}
                           {r.todayTitle && (
-                            <span className="truncate text-slate-500 dark:text-slate-600">
+                            <span className="text-slate-500 dark:text-slate-600">
                               · {r.todayTitle}
                               {r.todayDone ? " ✓" : ""}
                             </span>
@@ -538,44 +656,43 @@ export function CurriculumProgressPanel() {
                       </span>
                     </button>
 
-                    {/* Metrics — Learning, Work (prod + quality), Quiz */}
                     <div className="grid min-w-0 grid-cols-3 gap-2 lg:gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                           Learning
                         </p>
-                        <p className="truncate text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
+                        <p className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
                           {learning}%
                         </p>
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                           Work
                         </p>
                         <p
-                          className={`truncate text-sm font-semibold tabular-nums ${workPercentClass(workCombinedPct)}`}
+                          className={`text-sm font-semibold tabular-nums ${workPercentClass(workCombinedPct)}`}
                           title={
                             workBreakdown
-                              ? `Combined average: ${workMain} (${workBreakdown})`
-                              : "Average of production vs unit goal and quality on logged days"
+                              ? `Combined: ${workMain} (${workBreakdown})`
+                              : "Work vs scheduled training-work days"
                           }
                         >
                           {workMain}
                         </p>
                         {workBreakdown && (
-                          <p className="truncate text-[10px] tabular-nums text-slate-500">
+                          <p className="mt-0.5 whitespace-normal break-words text-[10px] leading-snug tabular-nums text-slate-500 dark:text-slate-400">
                             {workBreakdown}
                           </p>
                         )}
                         {workDetail && (
-                          <p className="truncate text-[10px] tabular-nums text-slate-500">
+                          <p className="whitespace-normal break-words text-[10px] leading-snug tabular-nums text-slate-500 dark:text-slate-400">
                             {workDetail}
                           </p>
                         )}
                         {workPending > 0 && (
                           <Link
                             href={`/admin/work-metrics?traineeId=${encodeURIComponent(r.id)}`}
-                            className="truncate text-[10px] font-medium text-amber-800 hover:underline dark:text-amber-300"
+                            className="mt-0.5 inline-block text-[10px] font-medium text-amber-800 hover:underline dark:text-amber-300"
                             onClick={(e) => e.stopPropagation()}
                             title={`${workPending} need entry`}
                           >
@@ -584,11 +701,11 @@ export function CurriculumProgressPanel() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                           Quiz
                         </p>
                         <p
-                          className={`truncate text-sm font-semibold tabular-nums ${quizClass(displayQuizScore ?? quiz)}`}
+                          className={`text-sm font-semibold tabular-nums ${quizClass(displayQuizScore ?? quiz)}`}
                           title={quizSub || quizMain}
                         >
                           {quizMain}
@@ -596,7 +713,6 @@ export function CurriculumProgressPanel() {
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
                       <Link
                         href={`/admin/curriculum?traineeId=${encodeURIComponent(r.id)}`}
@@ -608,14 +724,24 @@ export function CurriculumProgressPanel() {
                       {r.totalDays > 0 && (
                         <button
                           type="button"
-                          disabled={!!busyId}
+                          disabled={!!busyId || r.currentDay >= r.totalDays}
                           onClick={() =>
-                            promoteDay(r.id, r.name, r.totalDays, r.currentDay)
+                            promoteToNextDay(
+                              r.id,
+                              r.name,
+                              r.totalDays,
+                              r.currentDay
+                            )
                           }
                           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-sky-800 hover:bg-sky-50 disabled:opacity-50 dark:text-sky-200 dark:hover:bg-sky-950/50"
+                          title={
+                            r.currentDay >= r.totalDays
+                              ? "Already on the last scheduled day"
+                              : `Open Day ${r.currentDay + 1}`
+                          }
                         >
                           <ArrowRightCircle className="h-3 w-3" />
-                          Set day
+                          Next day
                         </button>
                       )}
                       {r.canExtendWeek !== false && (
@@ -624,76 +750,18 @@ export function CurriculumProgressPanel() {
                           disabled={!!busyId}
                           onClick={() => extendWeek(r.id, r.name)}
                           className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-900/40"
+                          title="Add extra training days to the schedule"
                         >
                           {busy ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
                           ) : (
-                            <CalendarPlus className="h-3 w-3" />
+                            <Plus className="h-3 w-3 shrink-0" />
                           )}
-                          Days
+                          Extra days
                         </button>
                       )}
                     </div>
                   </div>
-
-                  {open && (
-                    <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 sm:pl-11 dark:border-slate-800 dark:bg-slate-900/30">
-                      {hasProjects && (
-                        <div className="mb-4">
-                          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                            Projects
-                          </p>
-                          <p className="text-sm text-slate-800 dark:text-slate-200">
-                            {fmtProjectList(projects)}
-                          </p>
-                        </div>
-                      )}
-                      {delayedDays.length > 0 && (
-                        <div className="mb-4">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-                            Due / delayed days
-                          </p>
-                          <ul className="space-y-1.5">
-                            {delayedDays.map((d) => (
-                              <li
-                                key={d.dayNumber}
-                                className="flex flex-wrap items-baseline justify-between gap-2 text-xs"
-                              >
-                                <span className="text-slate-800 dark:text-slate-300">
-                                  Day {d.dayNumber}: {d.title}
-                                </span>
-                                <span
-                                  className={`tabular-nums ${dueBadgeClass(
-                                    d.due.status
-                                  )}`}
-                                >
-                                  {d.due.label}
-                                  {d.due.dueDate ? ` · due ${formatDisplayDate(d.due.dueDate)}` : ""}
-                                  {d.completedAt
-                                    ? ` · done ${formatDisplayDate(d.completedAt)}`
-                                    : ""}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {delayedDays.length === 0 && (
-                        <p className="text-sm text-slate-600 dark:text-slate-500">
-                          No due / delayed days right now.
-                        </p>
-                      )}
-                      {quizSub && (
-                        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{quizSub}</p>
-                      )}
-                      {r.finalQuizAttemptedAt && (
-                        <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-600">
-                          Quiz taken{" "}
-                          {formatDisplayDateTime(r.finalQuizAttemptedAt)}
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   {hasProjects && !open && (
                     <p className="border-t border-slate-200 px-4 py-2.5 text-xs text-slate-600 sm:px-5 sm:pl-11 dark:border-slate-800/60 dark:text-slate-500">
@@ -702,6 +770,70 @@ export function CurriculumProgressPanel() {
                         {fmtProjectList(projects)}
                       </span>
                     </p>
+                  )}
+
+                  {open && (
+                    <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 sm:pl-11 dark:border-slate-800 dark:bg-slate-900/30">
+                      {workDayLines.length > 0 && (
+                        <div className={delayedDays.length > 0 ? "mb-3" : ""}>
+                          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            Work by day
+                          </p>
+                          <ul className="space-y-1">
+                            {workDayLines.map((line) => (
+                              <li
+                                key={line.dayNumber}
+                                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs"
+                              >
+                                <span className="min-w-0 text-slate-800 dark:text-slate-300">
+                                  {line.label}
+                                </span>
+                                <span
+                                  className={`shrink-0 tabular-nums ${
+                                    line.status === "pending"
+                                      ? "text-amber-800 dark:text-amber-300"
+                                      : line.status === "upcoming"
+                                        ? "text-slate-500"
+                                        : "text-slate-600 dark:text-slate-400"
+                                  }`}
+                                >
+                                  {line.detail}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {delayedDays.length > 0 && (
+                        <div>
+                          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            Due status
+                          </p>
+                          <ul className="space-y-1">
+                            {delayedDays.map((d) => (
+                              <li
+                                key={d.dayNumber}
+                                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs"
+                              >
+                                <span className="text-slate-800 dark:text-slate-300">
+                                  Day {d.dayNumber}
+                                </span>
+                                <span
+                                  className={`shrink-0 tabular-nums ${dueBadgeClass(
+                                    d.due.status
+                                  )}`}
+                                >
+                                  {d.due.label}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {delayedDays.length === 0 && workDayLines.length === 0 && (
+                        <p className="text-xs text-slate-500">Nothing to expand yet.</p>
+                      )}
+                    </div>
                   )}
                 </li>
               );

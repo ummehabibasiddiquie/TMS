@@ -45,7 +45,8 @@ export function productionScorePercent(
     return null;
   }
   if (targetUnits <= 0) return null;
-  return Math.round((units / targetUnits) * 1000) / 10;
+  const raw = (units / targetUnits) * 100;
+  return Math.round(Math.min(100, Math.max(0, raw)) * 10) / 10;
 }
 
 export function formatPercent(value: number | null | undefined): string {

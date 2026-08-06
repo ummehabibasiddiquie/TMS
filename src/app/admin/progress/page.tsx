@@ -11,7 +11,7 @@ export default async function AdminProgressPage() {
   const isAdmin = user.role === "ADMIN";
 
   return (
-    <div className="mx-auto min-w-0 max-w-5xl space-y-6 pb-8">
+    <div className="mx-auto min-w-0 max-w-6xl space-y-6 pb-8">
       <CurriculumProgressPanel />
       {isAdmin && <EvaluationDecisionPanel />}
     </div>
