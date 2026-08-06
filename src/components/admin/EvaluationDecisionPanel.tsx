@@ -177,7 +177,6 @@ export function EvaluationDecisionPanel() {
     }
   }
 
-  
   if (loading && rows.length === 0) {
     return (
       <section className={`${panelShell} p-6`}>

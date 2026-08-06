@@ -59,7 +59,13 @@ export type DaySnapshot = {
   completedCount: number;
   totalCount: number;
   percent: number;
+  /** True when checklist, lessons, and work (if any) are fully complete — used in UI and metrics. */
   done: boolean;
+  /**
+   * True when checklist+lessons gate passes (empty days pass; work does not block).
+   * Used only to compute which calendar day the trainee is on.
+   */
+  unlockDone: boolean;
   /** When checklist+lessons were all completed (max item completedAt). */
   completedAt: string | null;
   due: DayDueInfo;
@@ -115,6 +121,18 @@ export type DayWisePlan = {
 function toPercent(done: number, total: number) {
   if (total <= 0) return 0;
   return Math.round((done / total) * 100);
+}
+
+/** Learning progress from actual checklist, lesson, and work items (not empty future days). */
+function overallLearningPercent(snapshots: DaySnapshot[]): number {
+  let completed = 0;
+  let total = 0;
+  for (const s of snapshots) {
+    if (s.totalCount <= 0) continue;
+    completed += s.completedCount;
+    total += s.totalCount;
+  }
+  return toPercent(completed, total);
 }
 
 /** Resolve which schedule a trainee uses: personal copy if present, else GLOBAL. */
@@ -242,10 +260,10 @@ async function buildDaySnapshot(
   const workRequired = workItems.length > 0;
   const isBlankDay = checklistGateTotal === 0 && !workRequired;
 
-  // Unlock / current-day: work never blocks. Blank and work-only days stay openable.
-  const done = checklistGateTotal === 0 || checklistGateDone;
+  // Unlock / current-day: work never blocks. Blank days do not block advancing.
+  const unlockDone = checklistGateTotal === 0 || checklistGateDone;
 
-  // Due board / "Done" labels: need Work Metrics when the day has training work.
+  // Metrics + "completed day": checklist, lessons, and work (when required) must be done.
   const displayDone =
     isBlankDay
       ? false
@@ -308,12 +326,9 @@ async function buildDaySnapshot(
     completedCount,
     totalCount,
     percent:
-      totalCount === 0
-        ? isBlankDay
-          ? 100
-          : 0
-        : toPercent(completedCount, totalCount),
-    done,
+      totalCount === 0 ? 0 : toPercent(completedCount, totalCount),
+    done: displayDone,
+    unlockDone,
     completedAt: completedAtDate ? completedAtDate.toISOString() : null,
     due,
     review: null,
@@ -465,7 +480,7 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
 
   let autoDay = Math.max(profile?.currentDayNumber || 1, days[0].dayNumber);
   for (const s of snapshots) {
-    if (!s.done) {
+    if (!s.unlockDone) {
       autoDay = s.dayNumber;
       break;
     }
@@ -480,10 +495,9 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
     currentDay = Math.min(maxDay, Math.max(autoDay, forced));
   }
 
-  const completedDays = snapshots.filter((s) => s.done).length;
-  const totalDays = snapshots.length;
-  const overallPercent = toPercent(completedDays, totalDays);
-  const scheduleComplete = snapshots.length > 0 && snapshots.every((s) => s.done);
+  const overallPercent = overallLearningPercent(snapshots);
+  const scheduleComplete =
+    snapshots.length > 0 && snapshots.every((s) => s.done);
 
   // Terminal Admin decisions are preserved; otherwise derive from schedule.
   const storedStatus = profile?.trainingStatus ?? "REGISTERED";

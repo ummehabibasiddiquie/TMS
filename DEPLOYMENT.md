@@ -8,6 +8,8 @@
 
 See **[DEPLOYMENT-WORKFLOW.md](./DEPLOYMENT-WORKFLOW.md)** for branch rules and release steps.
 
+**VPS step-by-step (tms.tfshrms.cloud):** [HOSTINGER-VPS-SETUP.md](./HOSTINGER-VPS-SETUP.md)
+
 ---
 
 ## Legacy note (Vercel-only)

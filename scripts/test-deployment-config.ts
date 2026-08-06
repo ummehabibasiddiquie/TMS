@@ -3,7 +3,36 @@
  * Run this before deploying to Vercel to catch common issues
  */
 
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
+
+/** Load .env from project root (tsx does not load it automatically). */
+function loadEnvFile() {
+  try {
+    const path = resolve(process.cwd(), ".env");
+    const content = readFileSync(path, "utf8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let val = trimmed.slice(eq + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (process.env[key] === undefined) process.env[key] = val;
+    }
+  } catch {
+    // no .env — rely on shell env (Vercel, etc.)
+  }
+}
+
+loadEnvFile();
 
 const requiredEnvVars = [
   'DATABASE_URL',
