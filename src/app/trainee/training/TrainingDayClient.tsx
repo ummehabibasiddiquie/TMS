@@ -216,6 +216,7 @@ function TrainingWorkPanel({
             sortOrder: 0,
             kind: "WORK" as const,
             assignedHours: null,
+            productionTarget: null,
             completed: false,
           },
         ];
@@ -224,11 +225,11 @@ function TrainingWorkPanel({
     <section>
       <h3 className={`mb-2 flex items-center gap-2 ${sectionLabel}`}>
         <Briefcase className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-        Training work
+        Training Work
       </h3>
       <p className="mb-3 text-xs text-slate-600 dark:text-slate-500">
-        Hours, production, and quality are recorded by Admin or your Team Lead. Incomplete work
-        does not block the next day.
+        Hours, production, and quality are recorded by Admin or your Team Lead in Work Metrics.
+        Missing work numbers do not block the next day.
       </p>
       {workLoading && <p className="mb-2 text-xs text-slate-500">Loading work data…</p>}
       {workMessage && !workLoading && (

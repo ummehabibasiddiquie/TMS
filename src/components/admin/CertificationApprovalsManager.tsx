@@ -87,7 +87,7 @@ function actorTone(event: CertHistoryEntry["event"]) {
 function kindLabel(kind: CertHistoryEntry["kind"]) {
   if (kind === "final_quiz") return "Final Quiz";
   if (kind === "project") return "Project";
-  return "Retake";
+  return "Older";
 }
 
 function historyActorEvent(row: CertHistoryEntry): Parameters<typeof formatCertActionBy>[0] {
@@ -149,42 +149,6 @@ export function CertificationApprovalsManager() {
         return history;
     }
   }, [history, historyFilter]);
-
-  async function allowRetake(traineeId: string, traineeName: string, certId: string) {
-    const cert =
-      items.find((i) => i.id === certId) ??
-      history.find((h) => h.certId === certId);
-    const score = cert?.score ?? items.find((i) => i.id === certId)?.score ?? 0;
-    if (
-      !confirm(
-        `Allow ${traineeName} to retake the final quiz?\n\nTheir ${Math.round(
-          typeof score === "number" ? score : 0
-        )}% score stays on record. They get one new attempt.`
-      )
-    ) {
-      return;
-    }
-    setActingId(`retake-${traineeId}`);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/admin/trainees/${traineeId}/decision`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "allowRetake" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not allow retake");
-      await load();
-      setMessage(
-        `${traineeName} may retake the final quiz (cycle ${data.newCycle ?? "next"}). Previous score: ${data.previousScore ?? "—"}%.`
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not allow retake");
-    } finally {
-      setActingId(null);
-    }
-  }
 
   async function review(
     id: string,
@@ -258,13 +222,12 @@ export function CertificationApprovalsManager() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
-            Certification review
+            Certificate Review
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-white">Certificates &amp; quiz history</h1>
+          <h1 className="mt-2 text-3xl font-bold text-white">Certificates and Quiz History</h1>
           <p className="mt-2 max-w-2xl text-slate-400">
-            Admin and Team Lead see the same timeline: pending reviews, retakes granted (by either
-            role), approvals, and rejections. Actions you take here are visible to the other role
-            instantly.
+            Admin and Team Lead see the same list: reviews waiting, approvals, and rejections.
+            What you do here shows for the other role right away.
           </p>
         </div>
         <button
@@ -280,18 +243,12 @@ export function CertificationApprovalsManager() {
         </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-4">
         {[
-          { label: "Pending review", value: stats.pending, icon: Clock, tone: "text-amber-300" },
-          {
-            label: "Retake open",
-            value: stats.retakeAwaiting ?? retakeAwaiting.length,
-            icon: RotateCcw,
-            tone: "text-violet-300",
-          },
+          { label: "Pending Review", value: stats.pending, icon: Clock, tone: "text-amber-300" },
           { label: "Approved", value: stats.approved, icon: Trophy, tone: "text-emerald-300" },
           { label: "Rejected", value: stats.rejected, icon: X, tone: "text-rose-300" },
-          { label: "All events", value: stats.total ?? history.length, icon: History, tone: "text-blue-300" },
+          { label: "All Events", value: stats.total ?? history.length, icon: History, tone: "text-blue-300" },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -321,10 +278,9 @@ export function CertificationApprovalsManager() {
 
       <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
         <div className="border-b border-slate-800 px-4 py-3 sm:px-5">
-          <h2 className="text-sm font-semibold text-white">Action needed</h2>
+          <h2 className="text-sm font-semibold text-white">Needs Review</h2>
           <p className="text-xs text-slate-500">
-            Pending reviews and rejected final quiz certificates — approve, reject, or allow a
-            retake.
+            Reviews waiting and rejected final quiz certificates. Approve or reject each one.
           </p>
         </div>
 
@@ -338,8 +294,8 @@ export function CertificationApprovalsManager() {
             <Award className="mx-auto h-10 w-10 text-slate-600" />
             <p className="mt-3 font-medium text-white">No pending reviews</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-400">
-              New submissions and rejected certificates appear here. Allow a retake after rejection
-              so the trainee can try again.
+              New submissions and rejected certificates appear here. The final quiz allows one attempt
+              only.
             </p>
           </div>
         ) : (
@@ -388,17 +344,6 @@ export function CertificationApprovalsManager() {
                   )}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  {item.kind === "final_quiz" && item.canAllowRetake && (
-                    <button
-                      type="button"
-                      disabled={actingId !== null}
-                      onClick={() => allowRetake(item.user.id, item.user.name, item.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-violet-700/50 bg-violet-950/40 px-3 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/50 disabled:opacity-50"
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                      Allow retake
-                    </button>
-                  )}
                   {item.status !== "REJECTED" && (
                     <>
                       <button
@@ -439,37 +384,15 @@ export function CertificationApprovalsManager() {
         )}
       </div>
 
-      {retakeAwaiting.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-violet-800/40 bg-violet-950/20">
-          <div className="border-b border-violet-800/40 px-4 py-3 sm:px-5">
-            <h2 className="text-sm font-semibold text-white">Retake open — awaiting trainee</h2>
-          </div>
-          <ul className="divide-y divide-violet-900/40">
-            {retakeAwaiting.map((row) => (
-              <li key={row.traineeId} className="px-4 py-4 sm:px-5">
-                <p className="font-medium text-white">{row.traineeName}</p>
-                <p className="mt-1 text-sm text-slate-300">
-                  Previous {row.previousScore != null ? `${row.previousScore}%` : "—"} · cycle{" "}
-                  {row.evaluationCycle}
-                </p>
-                <p className="mt-1 text-xs text-violet-200/90">
-                  {formatCertActionBy("retake_open", row.grantedBy) ??
-                    "Retake allowed by Admin or Team Lead"}{" "}
-                  · {formatDisplayDateTime(row.grantedAt)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Legacy retake grants may still appear in API data; final quiz allows one attempt only. */}
 
       <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
         <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
-            <h2 className="text-sm font-semibold text-white">Full history</h2>
+            <h2 className="text-sm font-semibold text-white">Full List</h2>
             <p className="text-xs text-slate-500">
-              Timeline of all certificate events. Use actions below to fix mistaken approve/reject
-              decisions on the current cycle.
+              All certificate events. Use the buttons below to fix a wrong approve or reject
+              on the current attempt.
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -479,7 +402,6 @@ export function CertificationApprovalsManager() {
                 ["pending", "Pending"],
                 ["approved", "Approved"],
                 ["rejected", "Rejected"],
-                ["retakes", "Retakes"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -534,7 +456,7 @@ export function CertificationApprovalsManager() {
                     <p className="text-xs text-slate-500">
                       {formatDisplayDateTime(row.at)}
                       {row.event === "pending" && !row.actor
-                        ? " · awaiting review (use Action needed above)"
+                        ? " · waiting for review (use Needs Review above)"
                         : null}
                     </p>
                     {(() => {
@@ -563,19 +485,6 @@ export function CertificationApprovalsManager() {
                     row.certId &&
                     row.kind !== "retake_grant" && (
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      {row.canAllowRetake && row.kind === "final_quiz" && (
-                        <button
-                          type="button"
-                          disabled={actingId !== null}
-                          onClick={() =>
-                            allowRetake(row.trainee.id, row.trainee.name, row.certId!)
-                          }
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-violet-700/50 bg-violet-950/40 px-3 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/50 disabled:opacity-50"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                          Allow retake
-                        </button>
-                      )}
                       {row.canApprove && row.event !== "pending" && (
                         <button
                           type="button"

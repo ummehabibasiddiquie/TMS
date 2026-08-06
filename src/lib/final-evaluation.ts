@@ -152,7 +152,7 @@ export async function getFinalQuizState(
 
   const unlocked = scheduleComplete;
   const attempted = Boolean(attempt);
-  const retakeGranted = !attempted && previousAttempts.length > 0;
+  const retakeGranted = false;
   const canSubmit = unlocked && !attempted;
 
   const attemptDto = attempt
@@ -221,13 +221,11 @@ export async function getFinalQuizState(
     band: getEvaluationBand(attemptDto?.score ?? null),
     message: !scheduleComplete
       ? "Complete all day-wise training days to unlock the final evaluation quiz."
-      : retakeGranted
-        ? "Admin allowed a retake. Your previous score(s) are kept on record — complete the quiz again when ready."
-        : attempted && certificateStatus === "PENDING_REVIEW"
-          ? "Final quiz submitted — pending Admin review. Your certificate will appear after approval."
-          : attempted
-            ? "Final evaluation submitted for this cycle."
-            : undefined,
+      : attempted && certificateStatus === "PENDING_REVIEW"
+        ? "Final quiz submitted — pending review. Your certificate will appear after approval."
+        : attempted
+          ? "Final evaluation submitted. Retakes are not available."
+          : undefined,
   };
 }
 
@@ -567,80 +565,9 @@ export async function rejectFinalQuizCertificateForTrainee(
   });
 }
 
-/** Admin / Team Lead: allow one more final-quiz attempt (bumps evaluation cycle). */
-export async function allowFinalQuizRetake(traineeId: string, grantedById: string) {
-  const quiz = await getActiveQuiz();
-  if (!quiz) {
-    throw new Error("No final evaluation quiz is configured.");
-  }
-
-  const cycle = await getOrCreateEvaluationCycle(traineeId);
-  const attempt = await prisma.finalEvaluationAttempt.findUnique({
-    where: {
-      userId_quizId_cycle: { userId: traineeId, quizId: quiz.id, cycle },
-    },
-  });
-  if (!attempt) {
-    throw new Error(
-      "Trainee has not completed the final quiz for the current cycle yet (or a retake is already pending)."
-    );
-  }
-
-  const profile = await prisma.traineeProfile.findUnique({
-    where: { userId: traineeId },
-    select: { trainingStatus: true, readyForProduction: true },
-  });
-  if (
-    profile?.trainingStatus === "APPROVED_IN_ORG" ||
-    profile?.readyForProduction
-  ) {
-    throw new Error("Cannot allow retake after the trainee is approved into the org.");
-  }
-  if (profile?.trainingStatus === "REJECTED") {
-    throw new Error("Cannot allow retake for a rejected trainee.");
-  }
-
-  const nextCycle = cycle + 1;
-  const grantedAt = new Date();
-  await prisma.traineeProfile.upsert({
-    where: { userId: traineeId },
-    create: {
-      userId: traineeId,
-      trainingStarted: true,
-      trainingStatus: "AWAITING_EVALUATION",
-      readyForProduction: false,
-      evaluationCycle: nextCycle,
-      finalQuizRetakeGrantedAt: grantedAt,
-      finalQuizRetakeGrantedById: grantedById,
-      finalQuizRetakePreviousScore: attempt.score,
-    },
-    update: {
-      evaluationCycle: nextCycle,
-      trainingStatus: "AWAITING_EVALUATION",
-      readyForProduction: false,
-      finalQuizRetakeGrantedAt: grantedAt,
-      finalQuizRetakeGrantedById: grantedById,
-      finalQuizRetakePreviousScore: attempt.score,
-    },
-  });
-
-  await prisma.finalQuizRetakeGrant.create({
-    data: {
-      userId: traineeId,
-      grantedById,
-      grantedAt,
-      previousCycle: cycle,
-      newCycle: nextCycle,
-      previousScore: attempt.score,
-    },
-  });
-
-  return {
-    previousCycle: cycle,
-    previousScore: Math.round(attempt.score),
-    newCycle: nextCycle,
-    grantedAt: grantedAt.toISOString(),
-  };
+/** Retakes are disabled — kept for API compatibility. */
+export async function allowFinalQuizRetake(_traineeId: string, _grantedById: string) {
+  throw new Error("Final quiz retakes are not allowed. Each trainee gets one attempt.");
 }
 
 /** Ensure a default final quiz exists (idempotent). */

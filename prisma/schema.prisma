@@ -421,6 +421,8 @@ model CurriculumChecklistItem {
   kind        String   @default("CHECKLIST")
   /// Assigned working hours for WORK items (shown to trainee)
   assignedHours Float?
+  /// Expected production units for WORK items (used to compute production percentage)
+  productionTarget Float?
   sortOrder   Int      @default(0)
   day         CurriculumDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
   progress    UserChecklistProgress[]

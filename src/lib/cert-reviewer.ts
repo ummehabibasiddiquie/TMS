@@ -19,7 +19,7 @@ export function certActionLabel(event: CertActionEvent): string {
     case "retake_granted":
     case "retake_open":
     case "superseded":
-      return "Retake allowed by";
+      return "Recorded by";
     default:
       return "By";
   }
@@ -44,7 +44,7 @@ export function formatCertActionByOrUnknown(
     event === "retake_open" ||
     event === "superseded"
   ) {
-    return "Retake allowed (grantor not recorded)";
+    return "Older record (who did it was not saved)";
   }
   if (event === "approved" || event === "rejected") {
     return null;

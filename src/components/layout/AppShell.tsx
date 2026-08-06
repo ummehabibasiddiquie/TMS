@@ -58,7 +58,7 @@ const navItems: { section: string; items: NavItem[] }[] = [
   {
     section: "My Progress",
     items: [
-      { href: "/certifications", label: "Certifications", icon: Award, roles: ["TRAINEE"] },
+      { href: "/certifications", label: "Certificates", icon: Award, roles: ["TRAINEE"] },
     ],
   },
   {
@@ -69,7 +69,7 @@ const navItems: { section: string; items: NavItem[] }[] = [
       { href: "/admin/progress", label: "Team Progress", icon: BarChart3, roles: ["TRAINER"] },
       { href: "/trainer/day-reviews", label: "Day Reviews", icon: ClipboardCheck, roles: ["TRAINER"] },
       { href: "/admin/work-metrics", label: "Work Metrics", icon: ClipboardCheck, roles: ["TRAINER"] },
-      { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["TRAINER"] },
+      { href: "/admin/certifications", label: "Certificate Approvals", icon: Award, roles: ["TRAINER"] },
       { href: "/trainer/courses", label: "Courses", icon: BookOpen, roles: ["TRAINER"] },
       { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["TRAINER"] },
       { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["TRAINER"] },
@@ -83,7 +83,7 @@ const navItems: { section: string; items: NavItem[] }[] = [
       { href: "/admin/progress", label: "Progress Reports", icon: BarChart3, roles: ["ADMIN"] },
       { href: "/trainer/day-reviews", label: "Day Reviews", icon: ClipboardCheck, roles: ["ADMIN"] },
       { href: "/admin/work-metrics", label: "Work Metrics", icon: ClipboardCheck, roles: ["ADMIN"] },
-      { href: "/admin/certifications", label: "Cert Approvals", icon: Award, roles: ["ADMIN"] },
+      { href: "/admin/certifications", label: "Certificate Approvals", icon: Award, roles: ["ADMIN"] },
       { href: "/admin/content", label: "Courses", icon: BookOpen, roles: ["ADMIN"] },
       { href: "/admin/projects", label: "Projects", icon: FolderKanban, roles: ["ADMIN"] },
       { href: "/admin/final-evaluation", label: "Final Quiz", icon: Award, roles: ["ADMIN"] },

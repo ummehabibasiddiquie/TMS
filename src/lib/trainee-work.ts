@@ -4,6 +4,8 @@
  */
 
 import { prisma } from "./db";
+import { getDayWisePlan } from "./day-wise-training";
+import { productionScorePercent } from "./work-metrics-display";
 
 export type TraineeDayWork = {
   projectId: string;
@@ -11,6 +13,8 @@ export type TraineeDayWork = {
   dayNumber: number;
   hoursLogged: number | null;
   productionUnits: number | null;
+  productionTarget: number | null;
+  productionScorePercent: number | null;
   entries: number;
   qualityScore: number | null;
   qcSamples: number;
@@ -28,6 +32,7 @@ export type TraineeWorkSummary = {
   totals: {
     hoursLogged: number | null;
     productionUnits: number | null;
+    productionScorePercent: number | null;
     entries: number;
     qualityScore: number | null;
   };
@@ -59,6 +64,7 @@ export async function listTraineeWorkMetrics(
       totals: {
         hoursLogged: null,
         productionUnits: null,
+        productionScorePercent: null,
         entries: 0,
         qualityScore: null,
       },
@@ -79,7 +85,17 @@ export async function listTraineeWorkMetrics(
     orderBy: { dayNumber: "asc" },
   });
 
+  const plan = await getDayWisePlan(traineeId);
+  const targetByDay = new Map<number, number>();
+  for (const d of plan.allDays) {
+    const target = d.workItems?.find(
+      (w) => w.productionTarget != null && w.productionTarget > 0
+    )?.productionTarget;
+    if (target != null) targetByDay.set(d.dayNumber, target);
+  }
+
   const projects: TraineeDayWork[] = rows.map((r) => {
+    const target = targetByDay.get(r.dayNumber) ?? null;
     const hasAny =
       r.hoursLogged != null ||
       r.productionUnits != null ||
@@ -90,6 +106,8 @@ export async function listTraineeWorkMetrics(
       dayNumber: r.dayNumber,
       hoursLogged: r.hoursLogged,
       productionUnits: r.productionUnits,
+      productionTarget: target,
+      productionScorePercent: productionScorePercent(r.productionUnits, target),
       entries: hasAny ? 1 : 0,
       qualityScore: r.qualityScore,
       qcSamples: r.qualityScore != null ? 1 : 0,
@@ -105,6 +123,8 @@ export async function listTraineeWorkMetrics(
   let prodN = 0;
   let qualitySum = 0;
   let qualityN = 0;
+  let prodPctSum = 0;
+  let prodPctN = 0;
   let entries = 0;
 
   for (const p of projects) {
@@ -116,6 +136,10 @@ export async function listTraineeWorkMetrics(
     if (p.productionUnits != null) {
       totalProd += p.productionUnits;
       prodN += 1;
+    }
+    if (p.productionScorePercent != null) {
+      prodPctSum += p.productionScorePercent;
+      prodPctN += 1;
     }
     if (p.qualityScore != null) {
       qualitySum += p.qualityScore;
@@ -131,13 +155,15 @@ export async function listTraineeWorkMetrics(
     totals: {
       hoursLogged: hoursN > 0 ? Math.round(totalHours * 10) / 10 : null,
       productionUnits: prodN > 0 ? Math.round(totalProd * 10) / 10 : null,
+      productionScorePercent:
+        prodPctN > 0 ? Math.round((prodPctSum / prodPctN) * 10) / 10 : null,
       entries,
       qualityScore:
         qualityN > 0 ? Math.round((qualitySum / qualityN) * 10) / 10 : null,
     },
     message:
       projects.length === 0
-        ? "No work metrics recorded yet. Admin or Team Lead can add hours, production, and quality."
+        ? "No work metrics recorded yet. Team Lead or Admin can add hours, production units, and quality scores."
         : undefined,
   };
 }
@@ -180,10 +206,11 @@ export async function upsertTraineeWorkMetric(args: {
     await prisma.traineeWorkMetric.deleteMany({
       where: { traineeId: args.traineeId, dayNumber },
     });
+    await syncWorkChecklistProgress(args.traineeId, dayNumber, false);
     return null;
   }
 
-  return prisma.traineeWorkMetric.upsert({
+  const row = await prisma.traineeWorkMetric.upsert({
     where: {
       traineeId_dayNumber: {
         traineeId: args.traineeId,
@@ -210,4 +237,48 @@ export async function upsertTraineeWorkMetric(args: {
     },
     include: { recordedBy: { select: { name: true } } },
   });
+
+  await syncWorkChecklistProgress(args.traineeId, dayNumber, true);
+  return row;
+}
+
+/** Mark curriculum WORK items complete when Work Metrics are saved for that day. */
+async function syncWorkChecklistProgress(
+  traineeId: string,
+  dayNumber: number,
+  completed: boolean
+) {
+  const { resolveCurriculumScope } = await import("./day-wise-training");
+  const { scopeKey } = await resolveCurriculumScope(traineeId);
+  const day = await prisma.curriculumDay.findFirst({
+    where: { scopeKey, dayNumber },
+    select: {
+      checklistItems: {
+        where: { kind: "WORK" },
+        select: { id: true },
+      },
+    },
+  });
+  if (!day?.checklistItems.length) return;
+
+  const now = completed ? new Date() : null;
+  await Promise.all(
+    day.checklistItems.map((item) =>
+      prisma.userChecklistProgress.upsert({
+        where: {
+          userId_itemId: { userId: traineeId, itemId: item.id },
+        },
+        create: {
+          userId: traineeId,
+          itemId: item.id,
+          completed,
+          completedAt: now,
+        },
+        update: {
+          completed,
+          completedAt: now,
+        },
+      })
+    )
+  );
 }

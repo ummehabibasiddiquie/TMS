@@ -40,6 +40,8 @@ export type DayChecklistItem = {
   kind: "CHECKLIST" | "WORK";
   /** Assigned hours for WORK items */
   assignedHours: number | null;
+  /** Expected production units (target) for WORK items */
+  productionTarget: number | null;
   completed: boolean;
 };
 
@@ -146,6 +148,7 @@ async function buildDaySnapshot(
       sortOrder: number;
       kind?: string;
       assignedHours?: number | null;
+      productionTarget?: number | null;
       progress: { completed: boolean; completedAt: Date | null }[];
     }[];
     lessons: {
@@ -164,23 +167,47 @@ async function buildDaySnapshot(
       };
     }[];
   },
-  trainingStart: Date | null
+  trainingStart: Date | null,
+  workMetric?: {
+    hoursLogged: number | null;
+    productionUnits: number | null;
+    qualityScore: number | null;
+    updatedAt: Date;
+  } | null
 ): Promise<DaySnapshot> {
+  const workMetricsSubmitted = Boolean(
+    workMetric &&
+      (workMetric.hoursLogged != null ||
+        workMetric.productionUnits != null ||
+        workMetric.qualityScore != null)
+  );
+
   const allTicks: DayChecklistItem[] = day.checklistItems
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((item) => ({
-      id: item.id,
-      title: item.title,
-      description: item.description,
-      sortOrder: item.sortOrder,
-      kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
-      assignedHours:
-        item.assignedHours != null && Number.isFinite(Number(item.assignedHours))
-          ? Number(item.assignedHours)
-          : null,
-      completed: item.progress[0]?.completed === true,
-    }));
+    .map((item) => {
+      const isWork = item.kind === "WORK";
+      return {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        sortOrder: item.sortOrder,
+        kind: isWork ? ("WORK" as const) : ("CHECKLIST" as const),
+        assignedHours:
+          item.assignedHours != null && Number.isFinite(Number(item.assignedHours))
+            ? Number(item.assignedHours)
+            : null,
+        productionTarget:
+          item.productionTarget != null &&
+          Number.isFinite(Number(item.productionTarget))
+            ? Number(item.productionTarget)
+            : null,
+        // Training work is tracked by Work Metrics, not by ticking the item.
+        completed: isWork
+          ? workMetricsSubmitted
+          : item.progress[0]?.completed === true,
+      };
+    });
 
   const checklist = allTicks.filter((i) => i.kind === "CHECKLIST");
   const workItems = allTicks.filter((i) => i.kind === "WORK");
@@ -203,12 +230,26 @@ async function buildDaySnapshot(
       };
     });
 
-  // Only checklist + courses gate day completion. Training work is tracked via HRMS
-  // and never blocks unlocking the next day.
-  const completedCount =
-    checklist.filter((c) => c.completed).length +
-    lessons.filter((l) => l.completed).length;
-  const totalCount = checklist.length + lessons.length;
+  // Checklist + courses gate unlocking the next day.
+  // Training work is tracked in Work Metrics (manager enters it) and must NOT block unlock.
+  const checklistDoneCount = checklist.filter((c) => c.completed).length;
+  const lessonDoneCount = lessons.filter((l) => l.completed).length;
+  const checklistGateTotal = checklist.length + lessons.length;
+  const checklistGateDone =
+    checklistGateTotal === 0 ||
+    checklistDoneCount + lessonDoneCount === checklistGateTotal;
+
+  const workRequired = workItems.length > 0;
+  const isBlankDay = checklistGateTotal === 0 && !workRequired;
+
+  // Unlock / current-day: work never blocks. Blank and work-only days stay openable.
+  const done = checklistGateTotal === 0 || checklistGateDone;
+
+  // Due board / "Done" labels: need Work Metrics when the day has training work.
+  const displayDone =
+    isBlankDay
+      ? false
+      : checklistGateDone && (!workRequired || workMetricsSubmitted);
 
   let dayType: DaySnapshot["dayType"] = "MIXED";
   if (day.dayType === "CHECKLIST" || day.dayType === "TRAINING" || day.dayType === "MIXED") {
@@ -221,11 +262,14 @@ async function buildDaySnapshot(
     dayType = "CHECKLIST";
   }
 
-  const done = totalCount === 0 || completedCount === totalCount;
+  const completedCount =
+    checklistDoneCount +
+    lessonDoneCount +
+    (workRequired && workMetricsSubmitted ? 1 : 0);
+  const totalCount = checklistGateTotal + (workRequired ? 1 : 0);
 
-  // Day completedAt = latest gate-item completion time when the day is done
   let completedAtDate: Date | null = null;
-  if (done && totalCount > 0) {
+  if (displayDone) {
     const times: Date[] = [];
     for (const item of day.checklistItems) {
       if (item.kind === "WORK") continue;
@@ -236,6 +280,9 @@ async function buildDaySnapshot(
       const p = link.lesson.progress[0];
       if (p?.completed && p.completedAt) times.push(new Date(p.completedAt));
     }
+    if (workMetricsSubmitted && workMetric?.updatedAt) {
+      times.push(new Date(workMetric.updatedAt));
+    }
     if (times.length > 0) {
       completedAtDate = new Date(Math.max(...times.map((t) => t.getTime())));
     }
@@ -243,7 +290,7 @@ async function buildDaySnapshot(
 
   const due = computeDayDueInfo({
     dayNumber: day.dayNumber,
-    done,
+    done: displayDone,
     completedAt: completedAtDate,
     trainingStart,
   });
@@ -260,9 +307,12 @@ async function buildDaySnapshot(
     lessons,
     completedCount,
     totalCount,
-    // Work-only days have no gate items — show 100% so UI doesn’t look “stuck”
-    percent: totalCount === 0 ? 100 : toPercent(completedCount, totalCount),
-    // Empty gate (work-only / empty day) does not block — next day still opens
+    percent:
+      totalCount === 0
+        ? isBlankDay
+          ? 100
+          : 0
+        : toPercent(completedCount, totalCount),
     done,
     completedAt: completedAtDate ? completedAtDate.toISOString() : null,
     due,
@@ -364,8 +414,34 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
     where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
   });
 
+  const workMetricRows = prisma.traineeWorkMetric
+    ? await prisma.traineeWorkMetric.findMany({
+        where: { traineeId: userId },
+        select: {
+          dayNumber: true,
+          hoursLogged: true,
+          productionUnits: true,
+          qualityScore: true,
+          updatedAt: true,
+        },
+      })
+    : [];
+  const workByDay = new Map(
+    workMetricRows.map((r) => [
+      r.dayNumber,
+      {
+        hoursLogged: r.hoursLogged,
+        productionUnits: r.productionUnits,
+        qualityScore: r.qualityScore,
+        updatedAt: r.updatedAt,
+      },
+    ])
+  );
+
   const snapshots = await Promise.all(
-    days.map((d) => buildDaySnapshot(userId, d, trainingStart))
+    days.map((d) =>
+      buildDaySnapshot(userId, d, trainingStart, workByDay.get(d.dayNumber) ?? null)
+    )
   );
 
   const reviews = await prisma.dayWorkReview.findMany({
@@ -721,6 +797,7 @@ export async function extendTraineeCurriculumByWeek(
       kind: string;
       sortOrder: number;
       assignedHours?: number | null;
+      productionTarget?: number | null;
     }[];
     lessons: {
       lessonId: string;
@@ -749,6 +826,7 @@ export async function extendTraineeCurriculumByWeek(
           kind: item.kind,
           sortOrder: item.sortOrder,
           assignedHours: item.assignedHours ?? null,
+          productionTarget: item.productionTarget ?? null,
         })),
         lessons: day.lessons.map((link) => ({
           lessonId: link.lessonId,
@@ -787,6 +865,7 @@ export async function extendTraineeCurriculumByWeek(
               description: item.description,
               kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
               assignedHours: item.assignedHours ?? null,
+              productionTarget: item.productionTarget ?? null,
               sortOrder: item.sortOrder,
             })),
           },
@@ -802,23 +881,18 @@ export async function extendTraineeCurriculumByWeek(
     })
   );
 
-  // Always bump evaluation cycle so after the extra week is completed,
-  // every trainee gets a fresh Final Quiz attempt (no requiz within a cycle).
-  const nextCycle = (profile?.evaluationCycle ?? 1) + 1;
-
+  // Always add extra days — final quiz remains a single attempt (no retake cycle bump).
   await prisma.traineeProfile.upsert({
     where: { userId: traineeId },
     create: {
       userId: traineeId,
       trainingStatus: "EXTENDED",
       readyForProduction: false,
-      evaluationCycle: nextCycle,
       trainingStarted: true,
     },
     update: {
       trainingStatus: "EXTENDED",
       readyForProduction: false,
-      evaluationCycle: nextCycle,
     },
   });
 
@@ -826,7 +900,7 @@ export async function extendTraineeCurriculumByWeek(
     added: source.length,
     fromDay: maxDay + 1,
     toDay: maxDay + source.length,
-    evaluationCycle: nextCycle,
+    evaluationCycle: profile?.evaluationCycle ?? 1,
     scheduleDaysBefore: plan.totalDays,
     fromTemplate: templateDays.length > 0,
     days: await listCurriculumDays(traineeId),

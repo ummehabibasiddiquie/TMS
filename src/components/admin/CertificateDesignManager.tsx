@@ -551,7 +551,7 @@ export function CertificateDesignManager() {
               href="/admin/certifications"
               className="font-medium text-blue-700 hover:underline dark:text-blue-400"
             >
-              Cert Approvals
+              Certificate Approvals
             </Link>{" "}
             or a trainee&apos;s Certifications page to view/download.
           </p>

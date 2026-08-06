@@ -23,6 +23,7 @@ type DayRow = {
   hrmsProjectId?: string | null;
   hasTrainingWork?: boolean;
   due?: { dueDate?: string | null } | null;
+  productionTarget?: number | null;
 };
 
 type TraineeRow = {
@@ -150,8 +151,8 @@ export function TraineeWorkMetricsManager({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-400">
         <span>
           {totalPending > 0
             ? `${totalPending} pending across team`
@@ -159,7 +160,7 @@ export function TraineeWorkMetricsManager({
         </span>
         <Link
           href="/admin/progress"
-          className="text-blue-400 hover:text-blue-300 hover:underline"
+          className="font-medium text-blue-600 hover:text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
         >
           Progress
         </Link>
@@ -167,13 +168,13 @@ export function TraineeWorkMetricsManager({
 
       {busy && <WorkingBanner message="Saving…" />}
       {msg && !busy && (
-        <p className="text-xs text-emerald-300/90">{msg}</p>
+        <p className="text-sm text-emerald-700 dark:text-emerald-300/90">{msg}</p>
       )}
-      {error && <p className="text-xs text-amber-200">{error}</p>}
+      {error && <p className="text-sm text-amber-700 dark:text-amber-200">{error}</p>}
 
-      <div className="grid gap-3 lg:grid-cols-[200px_1fr]">
-        <aside className="max-h-[min(70vh,560px)] overflow-y-auto rounded-lg border border-slate-800">
-          <ul className="divide-y divide-slate-800/80">
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <aside className="max-h-[min(75vh,720px)] overflow-y-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40">
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
             {rows.map((r) => {
               const pending = pendingCount(r);
               const active = r.id === selectedId;
@@ -185,18 +186,20 @@ export function TraineeWorkMetricsManager({
                       setSelectedId(r.id);
                       setMsg("");
                     }}
-                    className={`flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-xs transition ${
+                    className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition ${
                       active
-                        ? "bg-blue-600/25 text-white"
-                        : "text-slate-300 hover:bg-slate-900/70"
+                        ? "bg-blue-50 text-slate-900 dark:bg-blue-600/25 dark:text-white"
+                        : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900/70"
                     }`}
                   >
-                    <span className="min-w-0 truncate font-medium">
+                    <span className="min-w-0 truncate font-semibold">
                       {r.name}
                     </span>
                     <span
-                      className={`shrink-0 tabular-nums ${
-                        pending > 0 ? "text-amber-300" : "text-slate-600"
+                      className={`shrink-0 text-sm tabular-nums ${
+                        pending > 0
+                          ? "font-semibold text-amber-600 dark:text-amber-300"
+                          : "text-emerald-600 dark:text-slate-500"
                       }`}
                     >
                       {pending > 0 ? pending : "✓"}
@@ -208,9 +211,9 @@ export function TraineeWorkMetricsManager({
           </ul>
         </aside>
 
-        <div className="min-w-0">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 dark:shadow-none sm:p-6">
           {!selected ? (
-            <p className="text-sm text-slate-500">Select a trainee.</p>
+            <p className="text-base text-slate-500">Select a trainee.</p>
           ) : (
             <TraineeWorkMetricsForm
               traineeId={selected.id}
@@ -224,6 +227,7 @@ export function TraineeWorkMetricsManager({
                 hrmsProjectId: d.hrmsProjectId,
                 hasTrainingWork: d.hasTrainingWork,
                 dueDate: d.due?.dueDate ?? null,
+                productionTarget: d.productionTarget ?? null,
               }))}
               practiceProjects={(selected.practiceProjects || []).filter(
                 (p) =>
@@ -237,7 +241,6 @@ export function TraineeWorkMetricsManager({
                 productionUnits: w.productionUnits,
                 qualityScore: w.qualityScore,
               }))}
-              compact
               onSaved={async () => {
                 setBusy(true);
                 await load({ quiet: true });

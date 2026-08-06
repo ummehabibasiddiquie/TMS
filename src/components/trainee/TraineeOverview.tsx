@@ -316,7 +316,7 @@ export function TraineeOverview({ name, plan, work }: Props) {
           <div className="p-5">
             <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <Briefcase className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              Work metrics
+              Work Metrics
             </h2>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-500">
               Totals recorded by Admin or Team Lead
@@ -329,7 +329,9 @@ export function TraineeOverview({ name, plan, work }: Props) {
               <MetricPill
                 label="Production"
                 value={
-                  totals.productionUnits != null ? String(totals.productionUnits) : "—"
+                  totals.productionScorePercent != null
+                    ? `${totals.productionScorePercent}%`
+                    : "—"
                 }
               />
               <MetricPill
@@ -367,11 +369,15 @@ export function TraineeOverview({ name, plan, work }: Props) {
                           ) : null}
                         </span>
                         <span className="shrink-0 font-medium tabular-nums text-slate-800 dark:text-slate-400">
-                          {p.hoursLogged != null ? `${p.hoursLogged}h` : "—"}
+                          {p.hoursLogged != null ? `${p.hoursLogged} hours` : "—"}
                           {" · "}
-                          {p.productionUnits != null ? p.productionUnits : "—"} prod
+                          Production{" "}
+                          {p.productionScorePercent != null
+                            ? `${p.productionScorePercent}%`
+                            : "—"}
                           {" · "}
-                          {p.qualityScore != null ? `${p.qualityScore}%` : "—"} QA
+                          Quality{" "}
+                          {p.qualityScore != null ? `${p.qualityScore}%` : "—"}
                         </span>
                       </li>
                       );
@@ -392,7 +398,7 @@ export function TraineeOverview({ name, plan, work }: Props) {
         {[
           {
             href: "/certifications",
-            title: "Certifications",
+            title: "Certificates",
             body: "View certificates, final quiz, and approval status.",
             icon: Sparkles,
           },

@@ -175,7 +175,7 @@ export async function buildCertificationHistory(
 
     if (superseded) {
       event = "superseded";
-      statusLabel = "Superseded — retake granted";
+      statusLabel = "Older (replaced)";
       const resolved = resolveSupersededRetakeActor({
         userId: c.userId,
         supersededCycle: c.cycle,
@@ -292,14 +292,14 @@ export async function buildCertificationHistory(
       id: `retake-grant-${g.id}`,
       kind: "retake_grant",
       event: stillOpen ? "retake_open" : "retake_granted",
-      statusLabel: stillOpen ? "Retake open — awaiting trainee" : "Retake allowed",
+      statusLabel: stillOpen ? "Older Record" : "Older Record Saved",
       trainee: {
         id: g.user.id,
         name: g.user.name,
         email: g.user.email,
         employeeId: g.user.employeeId,
       },
-      title: "Final Quiz retake",
+      title: "Final Quiz (Older)",
       subtitle: `Cycle ${g.previousCycle} → ${g.newCycle}`,
       score: Math.round(g.previousScore),
       cycle: g.newCycle,
@@ -337,14 +337,14 @@ export async function buildCertificationHistory(
       id: `retake-legacy-${p.userId}-${p.evaluationCycle}`,
       kind: "retake_grant",
       event: "retake_open",
-      statusLabel: "Retake open — awaiting trainee",
+      statusLabel: "Older Record",
       trainee: {
         id: p.user.id,
         name: p.user.name,
         email: p.user.email,
         employeeId: p.user.employeeId,
       },
-      title: "Final Quiz retake",
+      title: "Final Quiz (Older)",
       subtitle: `Cycle ${p.evaluationCycle}`,
       score: p.finalQuizRetakePreviousScore
         ? Math.round(p.finalQuizRetakePreviousScore)

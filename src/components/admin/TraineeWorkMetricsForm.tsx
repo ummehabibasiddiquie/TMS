@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pencil, Save, X } from "lucide-react";
+import {
+  productionScorePercent,
+  formatPercent,
+  qualityScoreLabel,
+} from "@/lib/work-metrics-display";
 import { formatDisplayDate } from "@/lib/format-date";
 import { dueDateForDay, resolveTrainingStartDate } from "@/lib/day-due";
 
@@ -21,6 +26,7 @@ type DayOption = {
   hrmsProjectId?: string | null;
   hasTrainingWork?: boolean;
   dueDate?: string | null;
+  productionTarget?: number | null;
 };
 
 type Draft = {
@@ -149,6 +155,8 @@ export function TraineeWorkMetricsForm({
           partial.hrmsProjectId || fromSchedule?.hrmsProjectId || null,
         dueDate: partial.dueDate ?? fromSchedule?.dueDate ?? null,
         hasTrainingWork: true,
+        productionTarget:
+          fromSchedule?.productionTarget ?? partial.productionTarget ?? null,
       };
       if (!isTrainingWorkDay(merged) && !partial.projectName?.trim()) return;
       list.push(merged);
@@ -303,18 +311,26 @@ export function TraineeWorkMetricsForm({
   }
 
   const inputClass = compact
-    ? "w-full min-w-[3.25rem] rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-xs tabular-nums text-slate-100"
-    : "w-full min-w-[4.5rem] rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm tabular-nums text-slate-100";
+    ? "w-full min-w-[3.25rem] rounded border border-slate-300 bg-white px-1.5 py-1 text-xs tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+    : "w-full min-w-[5rem] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
 
   function renderDayCell(day: DayOption, className = "") {
     const dateLabel = formatDayDate(day, trainingStartDate);
     return (
       <td className={className}>
-        <div className="font-medium tabular-nums text-slate-200">
+        <div
+          className={`font-semibold tabular-nums text-slate-900 dark:text-slate-100 ${
+            compact ? "text-sm" : "text-lg"
+          }`}
+        >
           {day.dayNumber}
         </div>
         {dateLabel && (
-          <div className="mt-0.5 text-xs tabular-nums text-slate-400">
+          <div
+            className={`mt-0.5 tabular-nums text-slate-500 dark:text-slate-400 ${
+              compact ? "text-xs" : "text-sm"
+            }`}
+          >
             {dateLabel}
           </div>
         )}
@@ -325,11 +341,17 @@ export function TraineeWorkMetricsForm({
   function renderEditableRow(day: DayOption, mode: "pending" | "edit") {
     const draft = drafts[day.dayNumber] || toDraft(null);
     const busy = savingDay === day.dayNumber;
-    const cell = compact ? "py-1 pr-2" : "py-2 pr-3";
+    const cell = compact ? "py-1 pr-2" : "py-3.5 pr-4";
     return (
-      <tr key={`${mode}-${day.dayNumber}`} className="border-t border-slate-800/60">
-        {renderDayCell(day, `${cell} pl-2`)}
-        <td className={`${cell} text-xs text-slate-200`}>{projectLabel(day)}</td>
+      <tr key={`${mode}-${day.dayNumber}`} className="border-t border-slate-200 dark:border-slate-800/60">
+        {renderDayCell(day, `${cell} pl-3`)}
+        <td
+          className={`${cell} font-medium text-slate-800 dark:text-slate-200 ${
+            compact ? "text-xs" : "text-base"
+          }`}
+        >
+          {projectLabel(day)}
+        </td>
         <td className={cell}>
           <input
             type="number"
@@ -355,8 +377,31 @@ export function TraineeWorkMetricsForm({
               updateDraft(day.dayNumber, "productionUnits", e.target.value)
             }
             className={inputClass}
-            aria-label={`Production day ${day.dayNumber}`}
+            aria-label={`Production units day ${day.dayNumber}`}
           />
+          {day.productionTarget != null && day.productionTarget > 0 && (
+            <p
+              className={`mt-1 text-slate-500 ${
+                compact ? "text-[10px]" : "text-xs"
+              }`}
+            >
+              Target: {day.productionTarget} units
+            </p>
+          )}
+        </td>
+        <td
+          className={`${cell} tabular-nums text-slate-700 dark:text-slate-300 ${
+            compact ? "text-xs" : "text-base"
+          }`}
+        >
+          {formatPercent(
+            productionScorePercent(
+              draft.productionUnits.trim() === ""
+                ? null
+                : Number(draft.productionUnits),
+              day.productionTarget ?? null
+            )
+          )}
         </td>
         <td className={cell}>
           <input
@@ -370,22 +415,24 @@ export function TraineeWorkMetricsForm({
               updateDraft(day.dayNumber, "qualityScore", e.target.value)
             }
             className={inputClass}
-            aria-label={`Quality day ${day.dayNumber}`}
+            aria-label={`Quality percentage day ${day.dayNumber}`}
           />
         </td>
         <td className={cell}>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={disabled || busy}
               onClick={() => void saveRow(day)}
               title="Save"
-              className="inline-flex items-center justify-center rounded bg-blue-600 p-1.5 text-white hover:bg-blue-500 disabled:opacity-50"
+              className={`inline-flex items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 ${
+                compact ? "p-1.5" : "p-2.5"
+              }`}
             >
               {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className={compact ? "h-3.5 w-3.5 animate-spin" : "h-4 w-4 animate-spin"} />
               ) : (
-                <Save className="h-3.5 w-3.5" />
+                <Save className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
               )}
             </button>
             {mode === "edit" && (
@@ -394,9 +441,11 @@ export function TraineeWorkMetricsForm({
                 disabled={disabled || busy}
                 onClick={() => cancelEdit(day.dayNumber)}
                 title="Cancel"
-                className="inline-flex items-center justify-center rounded border border-slate-600 p-1.5 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                className={`inline-flex items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800 ${
+                  compact ? "p-1.5" : "p-2.5"
+                }`}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
               </button>
             )}
           </div>
@@ -407,37 +456,62 @@ export function TraineeWorkMetricsForm({
 
   if (allWorkRows.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-base text-slate-500">
         No training projects yet for {traineeName}.
       </p>
     );
   }
 
-  const th = compact ? "pb-1 pr-2 font-medium" : "pb-2 pr-3 font-medium";
+  const th = compact
+    ? "pb-1 pr-2 font-medium"
+    : "pb-3 pr-4 text-sm font-semibold uppercase tracking-wide";
 
   return (
-    <div className={compact ? "space-y-3" : "space-y-4 rounded-lg border border-slate-700/80 bg-slate-950/40 p-3"}>
+    <div
+      className={
+        compact
+          ? "space-y-3"
+          : "space-y-5"
+      }
+    >
       <div>
-        <div className="mb-2 flex items-baseline justify-between gap-2">
-          <p className="text-sm font-medium text-white">{traineeName}</p>
-          <p className="text-[10px] text-slate-500">
-            {pendingRows.length} to enter
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+          <p
+            className={`font-semibold text-slate-900 dark:text-white ${
+              compact ? "text-sm" : "text-2xl"
+            }`}
+          >
+            {traineeName}
+          </p>
+          <p
+            className={`text-slate-500 ${
+              compact ? "text-[10px]" : "text-sm"
+            }`}
+          >
+            {pendingRows.length} row{pendingRows.length === 1 ? "" : "s"} still empty
             {submittedRows.length > 0 ? ` · ${submittedRows.length} saved` : ""}
           </p>
         </div>
         {pendingRows.length === 0 ? (
-          <p className="text-xs text-slate-500">Nothing pending.</p>
+          <p className={`text-slate-500 ${compact ? "text-xs" : "text-base"}`}>
+            Nothing pending.
+          </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-800">
-            <table className="w-full min-w-[480px] text-left text-xs">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table
+              className={`w-full min-w-[640px] text-left ${
+                compact ? "text-xs" : "text-base"
+              }`}
+            >
               <thead>
-                <tr className="bg-slate-950/50 text-slate-500">
-                  <th className={`${th} pl-2 pt-1.5`}>Day</th>
-                  <th className={`${th} pt-1.5`}>Project</th>
-                  <th className={`${th} pt-1.5`}>Hrs</th>
-                  <th className={`${th} pt-1.5`}>Prod</th>
-                  <th className={`${th} pt-1.5`}>QC%</th>
-                  <th className={`${th} pt-1.5`}> </th>
+                <tr className="bg-slate-50 text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
+                  <th className={`${th} pl-3 pt-3`}>Day</th>
+                  <th className={`${th} pt-3`}>Project</th>
+                  <th className={`${th} pt-3`}>Hours</th>
+                  <th className={`${th} pt-3`}>Units</th>
+                  <th className={`${th} pt-3`}>Production</th>
+                  <th className={`${th} pt-3`}>Quality</th>
+                  <th className={`${th} pt-3`}> </th>
                 </tr>
               </thead>
               <tbody>
@@ -450,11 +524,30 @@ export function TraineeWorkMetricsForm({
 
       {submittedRows.length > 0 && (
         <div>
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-600">
+          <p
+            className={`mb-2 font-semibold uppercase tracking-wide text-slate-500 ${
+              compact ? "text-[10px]" : "text-sm"
+            }`}
+          >
             Saved
           </p>
-          <div className="overflow-x-auto rounded-lg border border-slate-800/80">
-            <table className="w-full min-w-[480px] text-left text-xs">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table
+              className={`w-full min-w-[640px] text-left ${
+                compact ? "text-xs" : "text-base"
+              }`}
+            >
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 dark:bg-slate-950/50 dark:text-slate-400">
+                  <th className={`${th} pl-3 pt-3`}>Day</th>
+                  <th className={`${th} pt-3`}>Project</th>
+                  <th className={`${th} pt-3`}>Hours</th>
+                  <th className={`${th} pt-3`}>Units</th>
+                  <th className={`${th} pt-3`}>Production</th>
+                  <th className={`${th} pt-3`}>Quality</th>
+                  <th className={`${th} pt-3`}> </th>
+                </tr>
+              </thead>
               <tbody>
                 {submittedRows.map((day) => {
                   if (editingDay === day.dayNumber) {
@@ -463,33 +556,44 @@ export function TraineeWorkMetricsForm({
                   const saved = existing.find(
                     (e) => e.dayNumber === day.dayNumber
                   );
+                  const cell = compact ? "py-1 pr-2" : "py-3.5 pr-4";
                   return (
                     <tr
                       key={`submitted-${day.dayNumber}`}
-                      className="border-t border-slate-800/50 text-slate-400 first:border-t-0"
+                      className="border-t border-slate-200 text-slate-700 first:border-t-0 dark:border-slate-800/50 dark:text-slate-300"
                     >
-                      {renderDayCell(day, "py-1 pl-2 pr-2")}
-                      <td className="py-1 pr-2 text-slate-300">
+                      {renderDayCell(day, `${cell} pl-3`)}
+                      <td className={`${cell} font-medium text-slate-800 dark:text-slate-200`}>
                         {projectLabel(day)}
                       </td>
-                      <td className="py-1 pr-2 tabular-nums">
+                      <td className={`${cell} tabular-nums`}>
                         {fmt(saved?.hoursLogged)}
                       </td>
-                      <td className="py-1 pr-2 tabular-nums">
+                      <td className={`${cell} tabular-nums`}>
                         {fmt(saved?.productionUnits)}
                       </td>
-                      <td className="py-1 pr-2 tabular-nums">
-                        {fmt(saved?.qualityScore, "%")}
+                      <td className={`${cell} tabular-nums`}>
+                        {formatPercent(
+                          productionScorePercent(
+                            saved?.productionUnits ?? null,
+                            day.productionTarget ?? null
+                          )
+                        )}
                       </td>
-                      <td className="py-1 pr-2">
+                      <td className={`${cell} tabular-nums`}>
+                        {qualityScoreLabel(saved?.qualityScore)}
+                      </td>
+                      <td className={cell}>
                         <button
                           type="button"
                           disabled={disabled || savingDay != null}
                           onClick={() => startEdit(day)}
                           title="Edit"
-                          className="inline-flex rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+                          className={`inline-flex rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 ${
+                            compact ? "p-1" : "p-2.5"
+                          }`}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
+                          <Pencil className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
                         </button>
                       </td>
                     </tr>
@@ -501,7 +605,9 @@ export function TraineeWorkMetricsForm({
         </div>
       )}
 
-      {error && <p className="text-xs text-amber-200">{error}</p>}
+      {error && (
+        <p className="text-sm text-amber-700 dark:text-amber-200">{error}</p>
+      )}
     </div>
   );
 }

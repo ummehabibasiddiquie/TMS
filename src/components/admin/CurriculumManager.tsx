@@ -28,6 +28,7 @@ type ChecklistItem = {
   sortOrder: number;
   kind?: string;
   assignedHours?: number | null;
+  productionTarget?: number | null;
 };
 
 type LessonLink = {
@@ -97,6 +98,7 @@ export function CurriculumManager() {
     title: "",
     description: "",
     assignedHours: "",
+    productionTarget: "",
   });
   const [lessonPick, setLessonPick] = useState("");
   const [traineePercent, setTraineePercent] = useState<number | null>(null);
@@ -422,9 +424,15 @@ export function CurriculumManager() {
   async function addChecklistItem(kind: "CHECKLIST" | "WORK" = "CHECKLIST") {
     if (!selected || !canEdit) return;
     const hoursRaw = newWork.assignedHours.trim();
+    const targetRaw = newWork.productionTarget.trim();
     const hoursNum = hoursRaw === "" ? null : Number(hoursRaw);
+    const targetNum = targetRaw === "" ? null : Number(targetRaw);
     if (kind === "WORK" && hoursRaw !== "" && (!Number.isFinite(hoursNum) || (hoursNum ?? 0) < 0)) {
-      setMsg("Assigned hours must be a valid number");
+      setMsg("Assigned hours must be a valid number.");
+      return;
+    }
+    if (kind === "WORK" && targetRaw !== "" && (!Number.isFinite(targetNum) || (targetNum ?? 0) <= 0)) {
+      setMsg("Production target must be a positive number.");
       return;
     }
     const payload =
@@ -434,6 +442,7 @@ export function CurriculumManager() {
             description: newWork.description,
             kind: "WORK",
             assignedHours: hoursNum,
+            productionTarget: targetNum,
           }
         : { title: newItem.title, description: newItem.description, kind: "CHECKLIST" };
     if (!payload.title.trim()) {
@@ -441,7 +450,11 @@ export function CurriculumManager() {
       return;
     }
     if (kind === "WORK" && (hoursNum == null || hoursNum <= 0)) {
-      setMsg("Enter assigned working hours for this training work");
+      setMsg("Enter assigned working hours for this training work.");
+      return;
+    }
+    if (kind === "WORK" && (targetNum == null || targetNum <= 0)) {
+      setMsg("Enter the production target (expected units) for this training work.");
       return;
     }
     const res = await fetch(`/api/curriculum/${selected.id}/checklist`, {
@@ -465,7 +478,7 @@ export function CurriculumManager() {
           }),
         });
       }
-      setNewWork({ hrmsProjectId: "", title: "", description: "", assignedHours: "" });
+      setNewWork({ hrmsProjectId: "", title: "", description: "", assignedHours: "", productionTarget: "" });
     } else {
       setNewItem({ title: "", description: "", kind: "CHECKLIST" });
     }
@@ -835,8 +848,7 @@ export function CurriculumManager() {
                     <button
                       type="button"
                       onClick={() => startEdit(selected)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-3 py-1.5 text-sm hover:bg-slate-800"
-                    >
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-600 px-3 py-1.5 text-sm hover:bg-slate-800">
                       <Pencil className="h-3.5 w-3.5" />
                       Edit
                     </button>
@@ -1027,6 +1039,11 @@ export function CurriculumManager() {
                                   Assigned hours: {item.assignedHours}
                                 </p>
                               )}
+                              {item.productionTarget != null && (
+                                <p className="text-xs font-medium text-amber-900 dark:text-amber-200/90">
+                                  Production Target: {item.productionTarget} units
+                                </p>
+                              )}
                               {item.description && (
                                 <p className="text-xs text-slate-600 dark:text-slate-500">
                                   {item.description}
@@ -1085,6 +1102,25 @@ export function CurriculumManager() {
                                 No HRMS projects loaded yet.
                               </p>
                             )}
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-400">
+                              Production Target (units) *
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={newWork.productionTarget}
+                              onChange={(e) =>
+                                setNewWork({ ...newWork, productionTarget: e.target.value })
+                              }
+                              placeholder="e.g. 100"
+                              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
+                            />
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              Team Lead and Admin use this to show production as a percentage for trainees.
+                            </p>
                           </div>
                           <div>
                             <label className="text-xs text-slate-400">

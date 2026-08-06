@@ -190,7 +190,7 @@ export function FinalExamGateCard() {
 
   if (!state) return null;
 
-  if (!state.scheduleComplete && !state.attempted && !state.retakeGranted) {
+  if (!state.scheduleComplete && !state.attempted) {
     return null;
   }
 
@@ -228,10 +228,10 @@ export function FinalExamGateCard() {
         </p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {pendingReview
-            ? "Awaiting Admin or Team Lead approval. Your certificate will appear after approval."
+            ? "Waiting for Admin or Team Lead approval. Your certificate will show after approval."
             : certRejected
-              ? "Certificate was not approved. See Certifications for details or ask about a retake."
-              : "View your result. Admin reviews this along with your overall training performance."}
+              ? "Certificate was not approved. See Certificates for details."
+              : "View your result. Admin reviews this along with your overall training work."}
         </p>
         {certRejected && state.certificateReviewNote && (
           <p className="mt-2 rounded-md bg-rose-100 px-2 py-1.5 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
@@ -260,35 +260,6 @@ export function FinalExamGateCard() {
     );
   }
 
-  if (state.retakeGranted && state.canSubmit) {
-    const prev = state.previousAttempts ?? [];
-    const last = prev[prev.length - 1];
-    return (
-      <Link
-        href="/trainee/final-quiz"
-        className="block overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-slate-50 shadow-lg transition hover:border-violet-300 dark:border-violet-500/40 dark:from-violet-950/40 dark:via-slate-900 dark:to-slate-950 dark:hover:border-violet-400/60"
-      >
-        <div className="px-5 py-5 sm:px-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-700 dark:text-violet-300/90">
-            Retake available
-          </p>
-          <h3 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">
-            Final quiz — attempt {state.cycle ?? prev.length + 1}
-          </h3>
-          <p className="mt-2 max-w-md text-sm text-slate-600 dark:text-slate-300">
-            Admin allowed a retake. Your previous score
-            {last != null ? ` (${last.score}%)` : ""} stays on record. A new
-            certificate is issued only after this attempt.
-          </p>
-          <span className="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-600">
-            <ClipboardCheck className="h-4 w-4" />
-            Start retake
-          </span>
-        </div>
-      </Link>
-    );
-  }
-
   return (
     <Link
       href="/trainee/final-quiz"
@@ -296,16 +267,16 @@ export function FinalExamGateCard() {
     >
       <div className="px-5 py-5 sm:px-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300/90">
-          Entrance evaluation
+          Final Quiz
         </p>
-        <h3 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">Final quiz ready</h3>
+        <h3 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">Final Quiz Ready</h3>
         <p className="mt-2 max-w-md text-sm text-slate-600 dark:text-slate-300">
-          Training schedule complete. Take the one-attempt final quiz. Your score is one point of
-          evaluation — overall training performance still matters.
+          Training days are done. Take the final quiz. You get one try. Your score is one part of
+          the review — your day work still matters too.
         </p>
         <span className="mt-4 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-300">
           <ClipboardCheck className="h-4 w-4" />
-          Open final quiz
+          Open Final Quiz
         </span>
       </div>
     </Link>
@@ -359,9 +330,7 @@ export function FinalEvaluationExam() {
     if (!state) return;
     if (
       !confirm(
-        state.retakeGranted
-          ? "Submit your retake?\n\nThis becomes your current score and certificate for this cycle."
-          : "Submit your final quiz?\n\nYou cannot retake unless Admin allows it."
+        "Submit your final quiz?\n\nYou only get one attempt. This score is submitted for review."
       )
     ) {
       return;
@@ -445,7 +414,7 @@ export function FinalEvaluationExam() {
         <div className="flex flex-col items-center px-8 py-10 text-center">
           {pendingReview && (
             <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-200">
-              Awaiting approval
+              Waiting for Approval
             </span>
           )}
           {certRejected && (
@@ -498,9 +467,9 @@ export function FinalEvaluationExam() {
                   href="/certifications"
                   className="text-blue-700 underline hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
                 >
-                  Certifications
+                  Certificates
                 </Link>{" "}
-                after Admin or Team Lead approves it. They may also allow a retake if needed.
+                after Admin or Team Lead approves it.
               </>
             ) : certRejected ? (
               <>
@@ -509,9 +478,9 @@ export function FinalEvaluationExam() {
                   href="/certifications"
                   className="text-blue-700 underline hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
                 >
-                  Certifications
+                  Certificates
                 </Link>{" "}
-                for details. Ask your Team Lead or Admin if a retake can be allowed.
+                for details. Final quiz retakes are not available.
               </>
             ) : certApproved ? (
               <>
@@ -520,7 +489,7 @@ export function FinalEvaluationExam() {
                   href="/certifications"
                   className="text-blue-700 underline hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
                 >
-                  Certifications
+                  Certificates
                 </Link>
                 . Admin and Team Lead review this score with your overall training performance.
               </>
@@ -555,7 +524,7 @@ export function FinalEvaluationExam() {
             <Shield className="h-7 w-7" />
           </div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-amber-700 dark:text-amber-300/90">
-            Entrance evaluation
+            Final Quiz
           </p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             {state.quiz.title}
@@ -563,7 +532,7 @@ export function FinalEvaluationExam() {
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600 dark:text-slate-400">
             {state.message ||
               state.quiz.description ||
-              "This final quiz is one evaluation point after training — like an entrance test. Admin also considers your day-wise work and overall performance."}
+              "This final quiz comes after training. You get one try. Admin also looks at your day work."}
           </p>
         </div>
         <div className="px-8 py-8 sm:px-10">
@@ -587,21 +556,10 @@ export function FinalEvaluationExam() {
             <li className="flex gap-3">
               <span className="mt-0.5 text-amber-600 dark:text-amber-400">•</span>
               <span>
-                {state.retakeGranted ? (
-                  <>
-                    <strong className="font-semibold text-slate-900 dark:text-white">
-                      Retake attempt
-                    </strong>{" "}
-                    — previous scores remain visible to Admin and Team Lead
-                  </>
-                ) : (
-                  <>
-                    <strong className="font-semibold text-slate-900 dark:text-white">
-                      One attempt per cycle
-                    </strong>{" "}
-                    — Admin or Team Lead may allow a retake if needed
-                  </>
-                )}
+                <strong className="font-semibold text-slate-900 dark:text-white">
+                  One attempt only
+                </strong>{" "}
+                — your score is submitted for Admin and Team Lead review
               </span>
             </li>
             <li className="flex gap-3">
@@ -615,7 +573,7 @@ export function FinalEvaluationExam() {
             onClick={() => setStarted(true)}
             className="w-full rounded-2xl bg-amber-400 py-3.5 text-sm font-bold text-slate-950 hover:bg-amber-300"
           >
-            {state.retakeGranted ? "Begin retake" : "Begin final quiz"}
+            Begin final quiz
           </button>
           <Link
             href="/trainee/training"

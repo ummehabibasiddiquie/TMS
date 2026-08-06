@@ -19,15 +19,32 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const isWork = body.kind === "WORK";
   let assignedHours: number | null = null;
+  let productionTarget: number | null = null;
   if (isWork && body.assignedHours != null && body.assignedHours !== "") {
     const n = Number(body.assignedHours);
     if (!Number.isFinite(n) || n <= 0) {
       return NextResponse.json(
-        { error: "Assigned hours must be a positive number" },
+        { error: "Assigned hours must be a positive number." },
         { status: 400 }
       );
     }
     assignedHours = n;
+  }
+  if (isWork && body.productionTarget != null && body.productionTarget !== "") {
+    const t = Number(body.productionTarget);
+    if (!Number.isFinite(t) || t <= 0) {
+      return NextResponse.json(
+        { error: "Production target must be a positive number." },
+        { status: 400 }
+      );
+    }
+    productionTarget = t;
+  }
+  if (isWork && productionTarget == null) {
+    return NextResponse.json(
+      { error: "Production target is required for training work." },
+      { status: 400 }
+    );
   }
 
   const maxOrder = await prisma.curriculumChecklistItem.aggregate({
@@ -42,6 +59,7 @@ export async function POST(req: Request, ctx: Ctx) {
       description: body.description?.trim() || null,
       kind: isWork ? "WORK" : "CHECKLIST",
       assignedHours: isWork ? assignedHours : null,
+      productionTarget: isWork ? productionTarget : null,
       sortOrder: body.sortOrder ?? (maxOrder._max.sortOrder ?? 0) + 1,
     },
   });

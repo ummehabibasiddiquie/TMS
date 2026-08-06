@@ -159,7 +159,7 @@ export default function CertificationsPage() {
     return {
       recipientName: user.name,
       projectName: cert.quizTitle || "Final Quiz",
-      categoryName: "Final Quiz evaluation",
+      categoryName: "Final Quiz",
       score: cert.score,
       certifiedAt: cert.certifiedAt,
       certificateId: cert.id,
@@ -182,9 +182,9 @@ export default function CertificationsPage() {
       <div className="mx-auto max-w-5xl space-y-8">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-300">
-            My Certifications
+            My Certificates
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-white">Certifications</h1>
+          <h1 className="mt-2 text-3xl font-bold text-white">Certificates</h1>
           <p className="mt-2 max-w-xl text-slate-400">
             Final Quiz certificate appears after Admin or Team Lead approval. Project certificates
             need Admin or Team Lead approval before view or download.
@@ -234,7 +234,7 @@ export default function CertificationsPage() {
                   <h2 className="text-lg font-semibold text-white">
                     {pendingFinalQuiz.quizTitle || "Final Quiz"}
                   </h2>
-                  <p className="text-sm text-slate-400">Final Quiz evaluation</p>
+                  <p className="text-sm text-slate-400">Final Quiz</p>
                   <p className="mt-2 text-sm text-amber-100">
                     Quiz score: {Math.round(pendingFinalQuiz.score)}%. Approval is pending from
                     Admin or Team Lead. You cannot view or download the certificate until it is approved.
@@ -260,12 +260,11 @@ export default function CertificationsPage() {
                   <h2 className="text-lg font-semibold text-white">
                     {rejectedFinalQuiz.quizTitle || "Final Quiz"}
                   </h2>
-                  <p className="text-sm text-slate-400">Final Quiz evaluation</p>
+                  <p className="text-sm text-slate-400">Final Quiz</p>
                   <p className="mt-2 text-sm text-rose-100">
                     Your quiz score was {Math.round(rejectedFinalQuiz.score)}%. Admin or Team Lead
                     did not approve this certificate for cycle {rejectedFinalQuiz.cycle}. You
-                    cannot view or download it. Ask your Team Lead or Admin if a retake can be
-                    allowed.
+                    cannot view or download it. Final quiz retakes are not available.
                   </p>
                   {rejectedFinalQuiz.reviewNote && (
                     <p className="mt-3 rounded-md bg-rose-950/40 px-3 py-2 text-sm text-rose-50">
@@ -304,7 +303,7 @@ export default function CertificationsPage() {
                       <h2 className="text-lg font-semibold text-white">
                         {cert.quizTitle || "Final Quiz"}
                       </h2>
-                      <p className="text-sm text-slate-400">Final Quiz evaluation</p>
+                      <p className="text-sm text-slate-400">Final Quiz</p>
                       <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-300">
                         <span className="flex items-center gap-1">
                           <Trophy className="h-4 w-4 text-amber-400" />
@@ -473,7 +472,7 @@ export default function CertificationsPage() {
                         </p>
                         <p className="mt-2 text-sm text-rose-100">
                           Quiz score: {Math.round(certification.score)}%. Admin or Team Lead did not
-                          approve this certificate. Retake the quiz when ready, then wait for
+                          approve this certificate. Retake the project quiz when ready, then wait for
                           review again.
                         </p>
                         {certification.reviewNote && (
@@ -497,7 +496,7 @@ export default function CertificationsPage() {
                         href={`/projects/${project.id}/quiz`}
                         className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
                       >
-                        Retake project quiz
+                        Retake Project Quiz
                       </Link>
                     </div>
                   </div>
@@ -540,7 +539,7 @@ export default function CertificationsPage() {
                       href={`/projects/${project.id}/quiz`}
                       className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
                     >
-                      {certification ? "Retake project quiz" : "Take project quiz"}
+                      {certification ? "Retake Project Quiz" : "Take Project Quiz"}
                     </Link>
                   </div>
                 </div>

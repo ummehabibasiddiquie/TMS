@@ -93,7 +93,7 @@ function phaseLabel(phase?: string) {
     case "REJECTED":
       return "Rejected";
     case "AWAITING_EVALUATION":
-      return "Awaiting decision";
+      return "Waiting for decision";
     case "PRACTICE_WORK":
       return "Practice";
     case "LEARNING":
@@ -311,7 +311,7 @@ export function CurriculumProgressPanel() {
             href="/admin/work-metrics"
             className="font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
           >
-            Work metrics
+            Work Metrics
           </Link>
           <Link
             href="/admin/curriculum"
@@ -373,9 +373,8 @@ export function CurriculumProgressPanel() {
                   : hasWork || hasProjects
                     ? "No data"
                     : "—";
-              const quizMain = r.quizRetakePending
-                ? "Retake open"
-                : quiz == null
+              const quizMain =
+                quiz == null
                   ? "—"
                   : `${Math.round(quiz)}%`;
               const quizSub = [
@@ -387,10 +386,7 @@ export function CurriculumProgressPanel() {
                 r.finalQuizCertificateReviewedBy
                   ? formatCertActionBy("rejected", r.finalQuizCertificateReviewedBy)
                   : null,
-                r.quizRetakePending && r.quizRetakeGrantedBy
-                  ? formatCertActionBy("retake_open", r.quizRetakeGrantedBy)
-                  : null,
-                [r.band?.label, r.evaluationCycle != null ? `cycle ${r.evaluationCycle}` : null]
+                [r.band?.label, r.evaluationCycle != null ? `Quiz Round ${r.evaluationCycle}` : null]
                   .filter(Boolean)
                   .join(" · ") || null,
               ]
@@ -444,29 +440,26 @@ export function CurriculumProgressPanel() {
                             {r.totalDays > 0 ? `/${r.totalDays}` : ""}
                           </span>
                           {extra > 0 && (
-                            <span className="text-amber-800 dark:text-amber-300/90">+{extra} extra</span>
+                            <span className="text-amber-800 dark:text-amber-300/90">+{extra} Extra</span>
                           )}
                           {r.forcedDay != null && (
-                            <span className="text-sky-800 dark:text-sky-300/90">day set</span>
+                            <span className="text-sky-800 dark:text-sky-300/90">Day Set</span>
                           )}
-                          {r.isCustom && <span className="text-slate-500 dark:text-slate-600">custom</span>}
+                          {r.isCustom && <span className="text-slate-500 dark:text-slate-600">Custom</span>}
                           {r.scheduleComplete && (
-                            <span className="text-emerald-700 dark:text-emerald-400/90">schedule done</span>
-                          )}
-                          {r.quizRetakePending && (
-                            <span className="text-violet-700 dark:text-violet-300">retake granted</span>
+                            <span className="text-emerald-700 dark:text-emerald-400/90">Schedule Done</span>
                           )}
                           {r.finalQuizCertificateStatus === "PENDING_REVIEW" && quiz != null && (
-                            <span className="text-amber-800 dark:text-amber-300">cert pending</span>
+                            <span className="text-amber-800 dark:text-amber-300">Certificate pending review</span>
                           )}
                           {r.trainingStart && (
                             <span className="text-slate-500 dark:text-slate-600">
-                              joined {formatDisplayDate(r.trainingStart)}
+                              Joined {formatDisplayDate(r.trainingStart)}
                             </span>
                           )}
                           {due && due.overdueCount > 0 && (
                             <span className="text-red-700 dark:text-red-300">
-                              {due.overdueCount} overdue
+                              {due.overdueCount} Overdue
                               {due.maxOverdueDays > 0
                                 ? ` (max ${due.maxOverdueDays}d)`
                                 : ""}
@@ -551,17 +544,10 @@ export function CurriculumProgressPanel() {
                           Quiz
                         </p>
                         <p
-                          className={`truncate text-sm font-semibold tabular-nums ${
-                            r.quizRetakePending
-                              ? "text-violet-800 dark:text-violet-300"
-                              : quizClass(displayQuizScore ?? quiz)
-                          }`}
+                          className={`truncate text-sm font-semibold tabular-nums ${quizClass(displayQuizScore ?? quiz)}`}
                           title={quizSub || quizMain}
                         >
                           {quizMain}
-                          {r.quizRetakePending && displayQuizScore != null
-                            ? ` · was ${Math.round(displayQuizScore)}%`
-                            : ""}
                         </p>
                       </div>
                     </div>

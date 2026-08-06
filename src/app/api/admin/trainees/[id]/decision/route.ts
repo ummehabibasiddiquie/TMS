@@ -3,15 +3,13 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { extendTraineeCurriculumByWeek } from "@/lib/day-wise-training";
 import {
-  allowFinalQuizRetake,
   approveFinalQuizCertificateForTrainee,
   getTraineeEvaluationScore,
   rejectFinalQuizCertificateForTrainee,
 } from "@/lib/final-evaluation";
 
 /**
- * Admin: reject, approve into org, add extra days, allow retake, approve certificate.
- * Team Lead: allow retake only (for assigned trainees).
+ * Admin: reject, approve into org, add extra days, approve certificate.
  */
 export async function POST(
   req: Request,
@@ -32,20 +30,20 @@ export async function POST(
   const action = body.action;
   if (
     !action ||
-    !["reject", "approve", "extendWeek", "allowRetake", "approveCertificate"].includes(
+    !["reject", "approve", "extendWeek", "approveCertificate"].includes(
       action
     )
   ) {
     return NextResponse.json(
       {
         error:
-          "action must be reject | approve | extendWeek | allowRetake | approveCertificate",
+          "action must be reject | approve | extendWeek | approveCertificate",
       },
       { status: 400 }
     );
   }
 
-  const actor = await requireSession(["ADMIN", "TRAINER"]);
+  const actor = await requireSession(["ADMIN"]);
   if (!actor) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -64,32 +62,6 @@ export async function POST(
 
   if (!trainee || trainee.role !== "TRAINEE") {
     return NextResponse.json({ error: "Trainee not found" }, { status: 404 });
-  }
-
-  if (action === "allowRetake") {
-    if (
-      actor.role === "TRAINER" &&
-      trainee.traineeProfile?.trainerId !== actor.id
-    ) {
-      return NextResponse.json({ error: "Not your trainee" }, { status: 403 });
-    }
-    try {
-      const result = await allowFinalQuizRetake(traineeId, actor.id);
-      return NextResponse.json({
-        ok: true,
-        action: "allowRetake",
-        traineeId,
-        ...result,
-      });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not allow quiz retake";
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
-  }
-
-  if (actor.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized — Admin only" }, { status: 401 });
   }
 
   const evaluation = await getTraineeEvaluationScore(traineeId);

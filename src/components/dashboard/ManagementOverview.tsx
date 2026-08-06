@@ -37,7 +37,7 @@ function attentionLabel(row: TraineeAttentionRow): string {
   if (row.reason === "DUE_TODAY") {
     return `${row.dueTodayCount} due today`;
   }
-  return "Awaiting evaluation decision";
+  return "Waiting for decision";
 }
 
 function attentionChipClass(row: TraineeAttentionRow): string {
@@ -83,13 +83,13 @@ export function AdminOverview({ name, stats }: Props) {
               {dashboardGreeting()}, {firstName}
             </p>
             <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-              Admin Command Center
+              Admin Home
             </p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white">
               Overview
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              Snapshot of trainees, training content, and items waiting on you.
+              Quick look at trainees, training, and items waiting on you.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/admin/progress" className={dashboardBtnPrimary}>
@@ -102,7 +102,7 @@ export function AdminOverview({ name, stats }: Props) {
           <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3">
             {[
               { label: "Trainees", value: stats.activeTrainees },
-              { label: "Certs pending", value: stats.pendingCerts },
+              { label: "Certificates Pending", value: stats.pendingCerts },
               { label: "Need decision", value: stats.awaitingEvaluation },
             ].map((pill) => (
               <div
@@ -147,7 +147,7 @@ export function AdminOverview({ name, stats }: Props) {
           {stats.awaitingEvaluation > 0 && (
             <DashboardAlert
               tone="blue"
-              title={`${stats.awaitingEvaluation} awaiting hire/reject decision`}
+              title={`${stats.awaitingEvaluation} waiting for hire or reject`}
               body="Final quiz complete — review overall performance."
               href="/admin/progress"
               action="Make decisions"
@@ -188,7 +188,7 @@ export function AdminOverview({ name, stats }: Props) {
           accent="from-amber-500/15"
         />
         <DashboardStatCard
-          label="Certs to approve"
+          label="Certificates to Approve"
           value={stats.pendingCerts}
           icon={Award}
           href="/admin/certifications"
@@ -209,7 +209,7 @@ export function AdminOverview({ name, stats }: Props) {
                 { label: "On Track", value: progressDistribution.onTrack, color: "bg-emerald-500", bgLight: "bg-emerald-100 dark:bg-emerald-500/20" },
                 { label: "Behind Schedule", value: progressDistribution.behind, color: "bg-amber-500", bgLight: "bg-amber-100 dark:bg-amber-500/20" },
                 { label: "At Risk", value: progressDistribution.atRisk, color: "bg-red-500", bgLight: "bg-red-100 dark:bg-red-500/20" },
-                { label: "Awaiting Decision", value: progressDistribution.awaiting, color: "bg-blue-500", bgLight: "bg-blue-100 dark:bg-blue-500/20" },
+                { label: "Waiting for Decision", value: progressDistribution.awaiting, color: "bg-blue-500", bgLight: "bg-blue-100 dark:bg-blue-500/20" },
               ].map((segment) => (
                 <div key={segment.label} className="flex items-center gap-3">
                   <div className="w-28 shrink-0 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -251,7 +251,7 @@ export function AdminOverview({ name, stats }: Props) {
                     {stats.pendingCerts} certification{stats.pendingCerts === 1 ? '' : 's'} pending review
                   </p>
                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                    Project and final quiz certificates awaiting approval
+                    Project and final quiz certificates waiting for approval
                   </p>
                 </div>
               </div>
@@ -278,7 +278,7 @@ export function AdminOverview({ name, stats }: Props) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-900 dark:text-white">
-                    {stats.awaitingEvaluation} trainee{stats.awaitingEvaluation === 1 ? '' : 's'} awaiting evaluation
+                    {stats.awaitingEvaluation} trainee{stats.awaitingEvaluation === 1 ? '' : 's'} waiting for a decision
                   </p>
                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                     Final quiz complete — hire/reject decision needed
@@ -362,7 +362,7 @@ export function AdminOverview({ name, stats }: Props) {
             action="View reports"
           />
           <DashboardQuickLink
-            title="Cert Approvals"
+            title="Certificate Approvals"
             body="Approve or reject project and final quiz certificates."
             href="/admin/certifications"
             action="Review certs"
@@ -392,7 +392,7 @@ export function TeamLeadOverview({ name, stats }: Props) {
               {dashboardGreeting()}, {firstName}
             </p>
             <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-              Team Lead Workspace
+              Team Lead Home
             </p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white">
               Overview
@@ -411,7 +411,7 @@ export function TeamLeadOverview({ name, stats }: Props) {
           <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3">
             {[
               { label: "My trainees", value: stats.activeTrainees },
-              { label: "Certs pending", value: stats.pendingCerts },
+              { label: "Certificates Pending", value: stats.pendingCerts },
               { label: "Reviews given", value: stats.dayReviewsGiven },
             ].map((pill) => (
               <div
@@ -473,7 +473,7 @@ export function TeamLeadOverview({ name, stats }: Props) {
           accent="from-sky-500/15"
         />
         <DashboardStatCard
-          label="Certs to approve"
+          label="Certificates to Approve"
           value={stats.pendingCerts}
           icon={Award}
           href="/admin/certifications"
@@ -508,7 +508,7 @@ export function TeamLeadOverview({ name, stats }: Props) {
                 { label: "On Track", value: progressDistribution.onTrack, color: "bg-emerald-500", bgLight: "bg-emerald-100 dark:bg-emerald-500/20" },
                 { label: "Behind Schedule", value: progressDistribution.behind, color: "bg-amber-500", bgLight: "bg-amber-100 dark:bg-amber-500/20" },
                 { label: "At Risk", value: progressDistribution.atRisk, color: "bg-red-500", bgLight: "bg-red-100 dark:bg-red-500/20" },
-                { label: "Awaiting Decision", value: progressDistribution.awaiting, color: "bg-blue-500", bgLight: "bg-blue-100 dark:bg-blue-500/20" },
+                { label: "Waiting for Decision", value: progressDistribution.awaiting, color: "bg-blue-500", bgLight: "bg-blue-100 dark:bg-blue-500/20" },
               ].map((segment) => (
                 <div key={segment.label} className="flex items-center gap-3">
                   <div className="w-28 shrink-0 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -550,7 +550,7 @@ export function TeamLeadOverview({ name, stats }: Props) {
                     {stats.pendingCerts} certification{stats.pendingCerts === 1 ? '' : 's'} pending review
                   </p>
                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                    Team project and final quiz certificates awaiting approval
+                    Team project and final quiz certificates waiting for approval
                   </p>
                 </div>
               </div>

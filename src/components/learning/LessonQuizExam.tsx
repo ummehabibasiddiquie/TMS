@@ -131,7 +131,7 @@ export function LessonQuizExam({
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-100 px-5 py-2.5 text-sm font-medium text-slate-900 hover:bg-white"
             >
               <RotateCcw className="h-4 w-4" />
-              Retake quiz
+              Retake Quiz
             </button>
           )}
         </div>

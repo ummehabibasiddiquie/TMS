@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarPlus, Loader2, RotateCcw, UserCheck, UserX } from "lucide-react";
+import { CalendarPlus, Loader2, UserCheck, UserX } from "lucide-react";
 import { type EvaluationBandInfo } from "@/lib/evaluation";
 import { SectionLoader, WorkingBanner } from "@/components/ui/SectionLoader";
 import { formatRole } from "@/lib/roles";
@@ -42,7 +42,7 @@ function formatPrevScores(attempts?: { cycle: number; score: number }[]) {
 function statusLabel(r: Row) {
   if (r.trainingStatus === "APPROVED_IN_ORG" || r.readyForProduction) return "Hired";
   if (r.trainingStatus === "REJECTED") return "Not hired";
-  if (r.scheduleComplete) return "Awaiting decision";
+  if (r.scheduleComplete) return "Waiting for decision";
   return r.trainingStatus || "In progress";
 }
 
@@ -129,8 +129,7 @@ export function EvaluationDecisionPanel() {
       reject: `Mark ${name} as not hired and deactivate their account?`,
       approve: `Hire ${name} into the organization?\n\nRequires final quiz ≥90%.`,
       extendWeek: `Add ${days} day${days === 1 ? "" : "s"} for ${name}?`,
-      allowRetake: `Allow ${name} to retake the final quiz?\n\nTheir previous score stays on record.`,
-      approveCertificate: `Approve ${name}'s final quiz certificate?\n\nThey can view it on Certifications.`,
+      approveCertificate: `Approve ${name}'s final quiz certificate?\n\nThey can view it on Certificates.`,
     };
     if (!confirm(labels[action] || "Confirm?")) return;
 
@@ -140,11 +139,9 @@ export function EvaluationDecisionPanel() {
         ? `Adding ${days} day${days === 1 ? "" : "s"} for ${name}…`
         : action === "approve"
           ? `Hiring ${name}…`
-          : action === "allowRetake"
-            ? `Allowing quiz retake for ${name}…`
-            : action === "approveCertificate"
-              ? `Approving certificate for ${name}…`
-              : `Updating ${name}…`
+          : action === "approveCertificate"
+            ? `Approving certificate for ${name}…`
+            : `Updating ${name}…`
     );
     setMsg("");
     try {
@@ -168,13 +165,11 @@ export function EvaluationDecisionPanel() {
           ? `${name} marked not hired and deactivated.`
           : action === "approve"
             ? `${name} hired into the org.`
-            : action === "allowRetake"
-              ? `${name} may retake the final quiz (cycle ${data.newCycle ?? ""}).`
-              : action === "approveCertificate"
-                ? `Certificate approved for ${name}.`
-                : data.fromDay != null
-                  ? `Added ${data.added ?? days} day(s) for ${name} (Days ${data.fromDay}–${data.toDay}).`
-                  : `Added ${days} day(s) for ${name}.`
+            : action === "approveCertificate"
+              ? `Certificate approved for ${name}.`
+              : data.fromDay != null
+                ? `Added ${data.added ?? days} day(s) for ${name} (Days ${data.fromDay}–${data.toDay}).`
+                : `Added ${days} day(s) for ${name}.`
       );
     } finally {
       setBusyId(null);
@@ -203,8 +198,8 @@ export function EvaluationDecisionPanel() {
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Hire decisions</h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
           When training is complete, choose <strong className="font-medium">Hire</strong> (quiz ≥
-          90%) or <strong className="font-medium">Do not hire</strong>. Use Add days or Allow
-          retake when someone needs more time or another quiz attempt. Certificate approval is
+          90%) or <strong className="font-medium">Do not hire</strong>. Use Add days when someone
+          needs more training time. The final quiz allows one attempt only. Certificate approval is
           separate from hiring.
         </p>
       </div>
@@ -234,7 +229,6 @@ export function EvaluationDecisionPanel() {
               const quiz = r.finalQuizScore;
               const prevScores = formatPrevScores(r.previousQuizAttempts);
               const rowBusy = busyId === r.id;
-              const canAllowRetake = quiz != null && !r.quizRetakePending && !decided;
               const certPending =
                 r.finalQuizCertificateStatus === "PENDING_REVIEW" && quiz != null;
               const canHire = quiz != null && quiz >= 90;
@@ -284,32 +278,22 @@ export function EvaluationDecisionPanel() {
                         <div>
                           <p className="text-[10px] font-semibold uppercase text-slate-500">Quiz</p>
                           <p className={`text-sm font-semibold tabular-nums ${quizScoreClass(quiz)}`}>
-                            {quiz == null
-                              ? r.quizRetakePending
-                                ? "Retake open"
-                                : "—"
-                              : `${Math.round(quiz)}%`}
+                            {quiz == null ? "—" : `${Math.round(quiz)}%`}
                           </p>
                           {prevScores && (
                             <p className="text-[10px] tabular-nums text-slate-500">
-                              Prev {prevScores}
+                              Previous {prevScores}
                             </p>
                           )}
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-500">
                         {certPending && (
-                          <span className="text-amber-800 dark:text-amber-300">Cert pending review</span>
+                          <span className="text-amber-800 dark:text-amber-300">Certificate pending review</span>
                         )}
                         {r.finalQuizCertificateStatus === "APPROVED" && quiz != null && (
                           <span className="text-emerald-800 dark:text-emerald-400">
                             Certificate approved
-                          </span>
-                        )}
-                        {r.quizRetakePending && r.quizRetakeGrantedBy && (
-                          <span className="text-violet-800 dark:text-violet-300">
-                            Retake by {r.quizRetakeGrantedBy.name} (
-                            {formatRole(r.quizRetakeGrantedBy.role)})
                           </span>
                         )}
                         {r.band?.label && (
@@ -368,17 +352,6 @@ export function EvaluationDecisionPanel() {
                                 Add days
                               </button>
                             )}
-                            {canAllowRetake && (
-                              <button
-                                type="button"
-                                disabled={!!busyId}
-                                onClick={() => decide(r.id, r.name, "allowRetake")}
-                                className={btnSecondary}
-                              >
-                                <RotateCcw className="h-3 w-3" />
-                                Allow retake
-                              </button>
-                            )}
                             {certPending && (
                               <button
                                 type="button"
@@ -386,7 +359,7 @@ export function EvaluationDecisionPanel() {
                                 onClick={() => decide(r.id, r.name, "approveCertificate")}
                                 className={btnSecondary}
                               >
-                                Approve cert
+                                Approve certificate
                               </button>
                             )}
                           </div>

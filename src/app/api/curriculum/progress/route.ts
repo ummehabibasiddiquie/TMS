@@ -224,6 +224,10 @@ export async function GET(req: Request) {
             Boolean(d.hrmsProjectId?.trim()) ||
             (d.workItems?.length ?? 0) > 0 ||
             (Boolean(d.projectName?.trim()) && d.dayType !== "CHECKLIST"),
+          productionTarget:
+            d.workItems?.find(
+              (w) => w.productionTarget != null && w.productionTarget > 0
+            )?.productionTarget ?? null,
         })),
       };
     })
