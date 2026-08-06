@@ -68,6 +68,7 @@ See [docs/README.md](docs/README.md) for the full list.
 | [docs/DIAGRAMS.md](docs/DIAGRAMS.md) | 3 diagrams for manager (export PNG) |
 | [docs/SYSTEM-DOCUMENTATION.md](docs/SYSTEM-DOCUMENTATION.md) | Dev reference |
 | [docs/DEVELOPMENT-LOG.md](docs/DEVELOPMENT-LOG.md) | Change log |
+| [DEPLOYMENT-WORKFLOW.md](DEPLOYMENT-WORKFLOW.md) | Vercel (`vercel`) + VPS (`main`) releases |
 
 ## Key Routes
 

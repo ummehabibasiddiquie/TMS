@@ -1,8 +1,18 @@
 # Deployment Guide - TMS Learning Platform
 
-## Architecture
-- **Frontend/Backend**: Vercel (Next.js)
-- **Database**: Hostinger (MySQL)
+## Architecture (current)
+
+- **Production app**: Hostinger VPS → `https://tms.tfshrms.cloud` (Git branch **`main`**)
+- **Staging / testing**: Vercel (Git branch **`vercel`**)
+- **Database**: MySQL on Hostinger (use **separate** DBs for staging vs production)
+
+See **[DEPLOYMENT-WORKFLOW.md](./DEPLOYMENT-WORKFLOW.md)** for branch rules and release steps.
+
+---
+
+## Legacy note (Vercel-only)
+
+The steps below still apply for **Vercel env vars and MySQL**, but production hosting is the VPS subdomain unless you choose otherwise.
 
 ## Step 1: Set up MySQL Database on Hostinger
 

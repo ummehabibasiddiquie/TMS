@@ -1,5 +1,15 @@
 # Vercel Deployment Guide
 
+## Branch workflow (staging only)
+
+Production for trainees lives on **Hostinger VPS** (`main` → `https://tms.tfshrms.cloud`).
+
+**Vercel is for testing:** connect the repo with **Production Branch = `vercel`**, push changes to **`vercel`**, test, then merge **`vercel` → `main`** and deploy on the VPS.
+
+Full steps: [DEPLOYMENT-WORKFLOW.md](./DEPLOYMENT-WORKFLOW.md).
+
+---
+
 ## Common Issue: "The page could not load" Error
 
 This error typically occurs when your Next.js application tries to access resources that aren't available in the production environment. Here's how to fix it:
