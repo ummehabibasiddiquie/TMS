@@ -563,9 +563,9 @@ export function CurriculumManager() {
 
       {busyLabel && <WorkingBanner message={busyLabel} />}
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900/50 p-4 sm:flex-row sm:items-end">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1">
-          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <User className="h-3.5 w-3.5" />
             Schedule for
           </label>
@@ -576,7 +576,7 @@ export function CurriculumManager() {
               setEditing(false);
               setSelectedId(null);
             }}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100"
           >
             <option value="">Default template (copied to new trainees)</option>
             <option value="__EXTRA_WEEK__">Extra week default</option>
@@ -589,18 +589,17 @@ export function CurriculumManager() {
           </select>
         </div>
         {isExtraWeekDefault ? (
-          <p className="max-w-md text-xs text-amber-200/90 sm:pb-2">
-            When Admin adds extra days, these days are copied to that trainee (cycled if they add more than this template). Leads can edit the
-            trainee’s copy afterward without changing this template.
+          <p className="max-w-md text-xs text-amber-950 dark:text-amber-200/90 sm:pb-2">
+            Copied to a trainee when you add extra days (cycles if you add more than this template).
           </p>
         ) : !traineeId ? (
-          <p className="max-w-md text-xs text-slate-400 sm:pb-2">
-            Trainees on the <strong className="font-medium text-slate-300">default track</strong> see
-            this template live — new days appear automatically. Use{" "}
-            <strong className="font-medium text-slate-300">Customize for this trainee</strong> only
-            when someone needs their own schedule; custom trainees are not changed when you edit the
-            default. Training-work updates on a default day still apply only to default trainees still
-            on that day or earlier (not past it).
+          <p className="max-w-md text-xs text-slate-600 dark:text-slate-400 sm:pb-2">
+            Default trainees see this template live. Use{" "}
+            <strong className="font-medium text-slate-800 dark:text-slate-300">
+              Customize for this trainee
+            </strong>{" "}
+            for a personal schedule. Training-work edits here apply only to trainees still on that
+            day or earlier.
           </p>
         ) : null}
         {traineeId && (
@@ -651,8 +650,8 @@ export function CurriculumManager() {
       </div>
 
       {isExtraWeekDefault && (
-        <p className="rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-          Editing Extra week default — shared template when you add extra days (cycled if you add more than this template).
+        <p className="rounded-xl bg-amber-100 px-4 py-2 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-200">
+          Editing Extra week default — used when you add extra days to a trainee.
         </p>
       )}
 
@@ -660,8 +659,8 @@ export function CurriculumManager() {
         <p
           className={`rounded-xl px-4 py-2 text-sm ${
             isCustom
-              ? "bg-amber-500/10 text-amber-200"
-              : "bg-slate-800/80 text-slate-300"
+              ? "bg-amber-100 text-amber-950 dark:bg-amber-500/10 dark:text-amber-200"
+              : "bg-slate-100 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300"
           }`}
         >
           {isCustom
@@ -671,7 +670,7 @@ export function CurriculumManager() {
       )}
 
       {msg && !busyLabel && (
-        <p className="rounded-xl bg-blue-500/10 px-4 py-2 text-sm text-blue-200">{msg}</p>
+        <p className="rounded-xl bg-blue-50 px-4 py-2 text-sm text-blue-900 dark:bg-blue-500/10 dark:text-blue-200">{msg}</p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
