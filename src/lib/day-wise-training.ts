@@ -853,6 +853,75 @@ async function personalCurriculumDiffersFromGlobal(traineeId: string): Promise<b
 }
 
 /**
+ * Copy completed checklist ticks from a trainee's personal day items onto matching GLOBAL items
+ * (same day number + title/sortOrder) before their personal curriculum rows are removed.
+ */
+async function migratePersonalChecklistProgressToGlobal(traineeId: string) {
+  const [personalDays, globalDays] = await Promise.all([
+    prisma.curriculumDay.findMany({
+      where: { scopeKey: traineeId },
+      orderBy: { dayNumber: "asc" },
+      include: {
+        checklistItems: {
+          where: { kind: "CHECKLIST" },
+          orderBy: { sortOrder: "asc" },
+          include: {
+            progress: { where: { userId: traineeId }, take: 1 },
+          },
+        },
+      },
+    }),
+    prisma.curriculumDay.findMany({
+      where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
+      orderBy: { dayNumber: "asc" },
+      include: {
+        checklistItems: {
+          where: { kind: "CHECKLIST" },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    }),
+  ]);
+
+  const globalByDay = new Map(globalDays.map((d) => [d.dayNumber, d]));
+  let migrated = 0;
+
+  for (const pd of personalDays) {
+    const gd = globalByDay.get(pd.dayNumber);
+    if (!gd) continue;
+
+    for (const pi of pd.checklistItems) {
+      const prog = pi.progress[0];
+      if (!prog?.completed) continue;
+
+      const gi =
+        gd.checklistItems.find(
+          (g) => g.sortOrder === pi.sortOrder && g.title === pi.title
+        ) ?? gd.checklistItems.find((g) => g.title === pi.title);
+
+      if (!gi) continue;
+
+      await prisma.userChecklistProgress.upsert({
+        where: { userId_itemId: { userId: traineeId, itemId: gi.id } },
+        create: {
+          userId: traineeId,
+          itemId: gi.id,
+          completed: true,
+          completedAt: prog.completedAt ?? new Date(),
+        },
+        update: {
+          completed: true,
+          completedAt: prog.completedAt ?? undefined,
+        },
+      });
+      migrated += 1;
+    }
+  }
+
+  return migrated;
+}
+
+/**
  * Default followers use live GLOBAL — drop stale personal copies.
  * Legacy rows that differ from GLOBAL are treated as custom (flag set, copy kept).
  */
@@ -879,6 +948,7 @@ export async function reconcileDefaultCurriculumFollowers() {
       continue;
     }
 
+    await migratePersonalChecklistProgressToGlobal(t.id);
     await prisma.curriculumDay.deleteMany({ where: { scopeKey: t.id } });
     clearedCopies += 1;
   }
@@ -918,6 +988,7 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
 
 /** Follow live GLOBAL default again (drops personal copy and custom flag). */
 export async function resetTraineeCurriculumToDefault(traineeId: string) {
+  await migratePersonalChecklistProgressToGlobal(traineeId);
   await prisma.curriculumDay.deleteMany({ where: { scopeKey: traineeId } });
   await setTraineeUsesCustomCurriculum(traineeId, false);
   return {

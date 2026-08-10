@@ -129,10 +129,19 @@ export default function DayReviewsPage() {
                 <p className="font-semibold text-slate-900 dark:text-white">{row.trainee.name}</p>
                 <p className="text-xs text-slate-500">{row.trainee.email}</p>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                  Day {row.currentDay} · Overall {row.overallPercent}%
-                  {row.todayTitle
-                    ? ` · Today: ${row.todayTitle} (${row.todayPercent}%)`
-                    : ""}
+                  On day {row.currentDay}
+                  {" · "}
+                  Learning {row.overallPercent}% (all days)
+                  {!row.todayDone && row.currentDay > 0 ? (
+                    <>
+                      {" · "}
+                      This day&apos;s tasks {row.todayPercent}%
+                      {row.todayTitle &&
+                      !/^day\s*\d+/i.test(row.todayTitle.trim()) ? (
+                        <> — {row.todayTitle}</>
+                      ) : null}
+                    </>
+                  ) : null}
                 </p>
               </div>
 
