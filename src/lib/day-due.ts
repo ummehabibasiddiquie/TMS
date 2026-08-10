@@ -1,12 +1,13 @@
 /**
  * Day-wise due dates from training start (join date).
- * Day N is due on the Nth working day (Mon–Fri; Sat/Sun are weekoffs).
+ * Day 1 due on join (first working day). Each next day due on the next Mon–Fri working day.
+ * Sat/Sun are weekoffs — never due dates and not counted in “Xd overdue”.
  * HRMS holidays are optional later via WorkingCalendar.holidayDates.
  * Trainees may complete open days in any order; due/late still apply per day.
  */
 
 import { differenceInCalendarDays, format, startOfDay } from "date-fns";
-import { DISPLAY_DATE_FORMAT, formatIsoDate } from "./format-date";
+import { DISPLAY_DATE_FORMAT, formatIsoDate, parseAppDate } from "./format-date";
 import {
   type WorkingCalendar,
   dueDateForTrainingDay,
@@ -40,8 +41,11 @@ export function resolveTrainingStartDate(
 ): Date | null {
   const raw = dateOfJoining || createdAt;
   if (!raw) return null;
-  const d = typeof raw === "string" ? new Date(raw) : raw;
-  if (Number.isNaN(d.getTime())) return null;
+  const d =
+    raw instanceof Date
+      ? parseAppDate(format(raw, "yyyy-MM-dd")) ?? raw
+      : parseAppDate(raw);
+  if (!d || Number.isNaN(d.getTime())) return null;
   return startOfDay(d);
 }
 

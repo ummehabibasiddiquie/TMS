@@ -30,7 +30,11 @@ export function nextWorkingDay(d: Date, cal: WorkingCalendar = emptyWorkingCalen
   return c;
 }
 
-/** Nth training day due date: N working days from start (Day 1 = first working day on/after join). */
+/**
+ * Due date for curriculum Day N (Mon–Fri only; Sat/Sun never count).
+ * Day 1 = first working day on/after join; Day 2 = next working day; and so on.
+ * Example: join Thu 6 Aug → Day 1 due Thu, Day 2 due Fri; on Mon 10 Aug → 1 working day overdue, not 3.
+ */
 export function dueDateForTrainingDay(
   trainingStart: Date,
   dayNumber: number,

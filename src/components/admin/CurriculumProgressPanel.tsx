@@ -500,6 +500,9 @@ export function CurriculumProgressPanel() {
               const displayQuizScore =
                 quiz != null ? quiz : r.quizRetakePending ? r.lastFinalQuizScore : null;
               const due = r.dueSummary;
+              const currentDayDue = (r.days || []).find(
+                (d) => d.dayNumber === r.currentDay
+              )?.due;
               const delayedDays = (r.days || []).filter(
                 (d) =>
                   d.due?.status === "OVERDUE" ||
@@ -646,14 +649,32 @@ export function CurriculumProgressPanel() {
                                 Cert pending
                               </span>
                             )}
-                          {due && due.overdueCount > 0 && (
-                            <span className="text-red-700 dark:text-red-300">Overdue</span>
-                          )}
-                          {due && due.dueTodayCount > 0 && due.overdueCount === 0 && (
+                          {currentDayDue?.status === "DUE_TODAY" && (
                             <span className="text-amber-800 dark:text-amber-200">
                               Due today
                             </span>
                           )}
+                          {currentDayDue?.status === "OVERDUE" && (
+                            <span className="text-red-700 dark:text-red-300">
+                              Overdue
+                            </span>
+                          )}
+                          {currentDayDue?.status !== "DUE_TODAY" &&
+                            currentDayDue?.status !== "OVERDUE" &&
+                            due &&
+                            due.overdueCount > 0 && (
+                              <span className="text-red-700 dark:text-red-300">
+                                Overdue
+                              </span>
+                            )}
+                          {currentDayDue?.status !== "DUE_TODAY" &&
+                            due &&
+                            due.dueTodayCount > 0 &&
+                            due.overdueCount === 0 && (
+                              <span className="text-amber-800 dark:text-amber-200">
+                                Due today
+                              </span>
+                            )}
                           {r.todayTitle && (
                             <span className="text-slate-500 dark:text-slate-600">
                               · {r.todayTitle}
