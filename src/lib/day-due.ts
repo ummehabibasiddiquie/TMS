@@ -1,16 +1,21 @@
 /**
  * Day-wise due dates from training start (join date).
- * Day N is due on startDate + (N - 1) calendar days.
+ * Day N is due on the Nth working day (Mon–Fri; Sat/Sun are weekoffs).
+ * HRMS holidays are optional later via WorkingCalendar.holidayDates.
  * Trainees may complete open days in any order; due/late still apply per day.
  */
 
-import {
-  addDays,
-  differenceInCalendarDays,
-  format,
-  startOfDay,
-} from "date-fns";
+import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { DISPLAY_DATE_FORMAT, formatIsoDate } from "./format-date";
+import {
+  type WorkingCalendar,
+  dueDateForTrainingDay,
+  emptyWorkingCalendar,
+  workingDaysAfterDue,
+} from "./working-calendar";
+
+export type { WorkingCalendar } from "./working-calendar";
+export { emptyWorkingCalendar };
 
 export type DayDueStatus =
   | "UPCOMING"
@@ -24,7 +29,7 @@ export type DayDueInfo = {
   dueDate: string;
   completedAt: string | null;
   status: DayDueStatus;
-  /** Calendar days after due (overdue now, or when completed late). */
+  /** Working days after due (overdue now, or when completed late). */
   daysLate: number | null;
   label: string;
 };
@@ -40,10 +45,13 @@ export function resolveTrainingStartDate(
   return startOfDay(d);
 }
 
-/** Due calendar date for Day N (1-based). */
-export function dueDateForDay(trainingStart: Date, dayNumber: number): Date {
-  const n = Math.max(1, Math.floor(dayNumber));
-  return addDays(startOfDay(trainingStart), n - 1);
+/** Due calendar date for Day N (1-based; Mon–Fri, Sat/Sun off). */
+export function dueDateForDay(
+  trainingStart: Date,
+  dayNumber: number,
+  cal: WorkingCalendar = emptyWorkingCalendar
+): Date {
+  return dueDateForTrainingDay(trainingStart, dayNumber, cal);
 }
 
 export function computeDayDueInfo(args: {
@@ -52,7 +60,9 @@ export function computeDayDueInfo(args: {
   completedAt?: Date | string | null;
   trainingStart: Date | null;
   today?: Date;
+  calendar?: WorkingCalendar;
 }): DayDueInfo {
+  const cal = args.calendar ?? emptyWorkingCalendar;
   const today = startOfDay(args.today ?? new Date());
 
   if (!args.trainingStart) {
@@ -67,7 +77,7 @@ export function computeDayDueInfo(args: {
     };
   }
 
-  const due = dueDateForDay(args.trainingStart, args.dayNumber);
+  const due = dueDateForDay(args.trainingStart, args.dayNumber, cal);
   const dueDate = format(due, "yyyy-MM-dd");
   const completedRaw = args.completedAt
     ? typeof args.completedAt === "string"
@@ -83,7 +93,7 @@ export function computeDayDueInfo(args: {
     const completedDay = completedRaw
       ? startOfDay(completedRaw)
       : today;
-    const late = differenceInCalendarDays(completedDay, due);
+    const late = workingDaysAfterDue(due, completedDay, cal);
     if (late > 0) {
       return {
         dueDate,
@@ -121,13 +131,13 @@ export function computeDayDueInfo(args: {
       label: "Due today",
     };
   }
-  const overdue = -untilDue;
+  const overdue = workingDaysAfterDue(due, today, cal);
   return {
     dueDate,
     completedAt: null,
     status: "OVERDUE",
     daysLate: overdue,
-    label: `${overdue}d overdue`,
+    label: overdue > 0 ? `${overdue}d overdue` : "Overdue",
   };
 }
 
@@ -137,7 +147,6 @@ export type DueSummary = {
   dueTodayCount: number;
   doneLateCount: number;
   doneOnTimeCount: number;
-  /** Worst open overdue daysLate, else 0 */
   maxOverdueDays: number;
 };
 
