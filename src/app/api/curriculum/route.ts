@@ -93,7 +93,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "This trainee still uses the default schedule. Enable a personal schedule first.",
+            "This trainee follows the default template. Use “Customize for this trainee” before adding trainee-only days.",
         },
         { status: 400 }
       );

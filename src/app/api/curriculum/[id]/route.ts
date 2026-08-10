@@ -5,6 +5,7 @@ import {
   GLOBAL_CURRICULUM_SCOPE,
   isSharedCurriculumScope,
   assertCanManageTrainee,
+  setTraineeUsesCustomCurriculum,
   syncGlobalDayWorkToTraineeCopies,
 } from "@/lib/day-wise-training";
 
@@ -87,6 +88,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const day = await prisma.curriculumDay.update({ where: { id }, data });
     if (allowed.day.scopeKey === GLOBAL_CURRICULUM_SCOPE) {
       await syncGlobalDayWorkToTraineeCopies(day.dayNumber);
+    } else if (!isSharedCurriculumScope(allowed.day.scopeKey)) {
+      await setTraineeUsesCustomCurriculum(allowed.day.scopeKey, true);
     }
     return NextResponse.json({ day });
   } catch (e: unknown) {

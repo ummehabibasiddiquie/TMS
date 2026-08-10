@@ -135,15 +135,37 @@ function overallLearningPercent(snapshots: DaySnapshot[]): number {
   return toPercent(completed, total);
 }
 
-/** Resolve which schedule a trainee uses: personal copy if present, else GLOBAL. */
+export async function traineeUsesCustomCurriculum(userId: string): Promise<boolean> {
+  const profile = await prisma.traineeProfile.findUnique({
+    where: { userId },
+    select: { usesCustomCurriculum: true },
+  });
+  return profile?.usesCustomCurriculum === true;
+}
+
+export async function setTraineeUsesCustomCurriculum(
+  traineeId: string,
+  usesCustom: boolean
+) {
+  await prisma.traineeProfile.upsert({
+    where: { userId: traineeId },
+    create: {
+      userId: traineeId,
+      usesCustomCurriculum: usesCustom,
+      trainingStarted: false,
+      trainingStatus: "REGISTERED",
+    },
+    update: { usesCustomCurriculum: usesCustom },
+  });
+}
+
+/** Resolve which schedule a trainee uses (flag-driven, not “has personal rows”). */
 export async function resolveCurriculumScope(userId: string): Promise<{
   scopeKey: string;
   isCustom: boolean;
 }> {
-  const customCount = await prisma.curriculumDay.count({
-    where: { scopeKey: userId },
-  });
-  if (customCount > 0) {
+  const usesCustom = await traineeUsesCustomCurriculum(userId);
+  if (usesCustom) {
     return { scopeKey: userId, isCustom: true };
   }
   return { scopeKey: GLOBAL_CURRICULUM_SCOPE, isCustom: false };
@@ -410,6 +432,22 @@ export async function syncGlobalDayWorkToTraineeCopies(dayNumber: number) {
   let updated = 0;
   for (const pd of personalDays) {
     const traineeId = pd.scopeKey;
+    const profile = await prisma.traineeProfile.findUnique({
+      where: { userId: traineeId },
+      select: {
+        usesCustomCurriculum: true,
+        currentDayNumber: true,
+        forcedCurrentDayNumber: true,
+      },
+    });
+    if (profile?.usesCustomCurriculum === true) continue;
+
+    const openDay = Math.max(
+      profile?.currentDayNumber ?? 1,
+      profile?.forcedCurrentDayNumber ?? 0
+    );
+    if (openDay > n) continue;
+
     const personalDay = await prisma.curriculumDay.findUnique({
       where: { id: pd.id },
       include: dayInclude(traineeId),
@@ -734,8 +772,124 @@ export async function setTraineeCurrentDay(traineeId: string, dayNumber: number)
   return getDayWisePlan(traineeId);
 }
 
+type CurriculumDayCloneSource = {
+  dayNumber: number;
+  title: string;
+  dayType: string;
+  projectName: string | null;
+  hrmsProjectId: string | null;
+  description: string | null;
+  checklistItems: {
+    title: string;
+    description: string | null;
+    kind: string;
+    assignedHours: number | null;
+    productionTarget: number | null;
+    sortOrder: number;
+  }[];
+  lessons: {
+    lessonId: string;
+    label: string | null;
+    sortOrder: number;
+  }[];
+};
+
+const curriculumDayCloneInclude = {
+  checklistItems: { orderBy: { sortOrder: "asc" as const } },
+  lessons: { orderBy: { sortOrder: "asc" as const } },
+};
+
+function curriculumDayCreateData(scopeKey: string, day: CurriculumDayCloneSource) {
+  return {
+    scopeKey,
+    dayNumber: day.dayNumber,
+    title: day.title,
+    dayType: day.dayType,
+    projectName: day.projectName,
+    hrmsProjectId: day.hrmsProjectId,
+    description: day.description,
+    checklistItems: {
+      create: day.checklistItems.map((item) => ({
+        title: item.title,
+        description: item.description,
+        kind: item.kind === "WORK" ? ("WORK" as const) : ("CHECKLIST" as const),
+        assignedHours: item.assignedHours ?? null,
+        productionTarget: item.productionTarget ?? null,
+        sortOrder: item.sortOrder,
+      })),
+    },
+    lessons: {
+      create: day.lessons.map((link) => ({
+        lessonId: link.lessonId,
+        label: link.label,
+        sortOrder: link.sortOrder,
+      })),
+    },
+  };
+}
+
+/** True when a trainee's personal copy no longer matches the GLOBAL template (legacy detection). */
+async function personalCurriculumDiffersFromGlobal(traineeId: string): Promise<boolean> {
+  const [globalDays, personalDays] = await Promise.all([
+    prisma.curriculumDay.findMany({
+      where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
+      select: { dayNumber: true, title: true },
+      orderBy: { dayNumber: "asc" },
+    }),
+    prisma.curriculumDay.findMany({
+      where: { scopeKey: traineeId },
+      select: { dayNumber: true, title: true },
+      orderBy: { dayNumber: "asc" },
+    }),
+  ]);
+  if (personalDays.length === 0) return false;
+  if (personalDays.length > globalDays.length) return true;
+  const globalByNum = new Map(globalDays.map((d) => [d.dayNumber, d.title]));
+  for (const p of personalDays) {
+    const gTitle = globalByNum.get(p.dayNumber);
+    if (gTitle == null || gTitle !== p.title) return true;
+  }
+  return false;
+}
+
+/**
+ * Default followers use live GLOBAL — drop stale personal copies.
+ * Legacy rows that differ from GLOBAL are treated as custom (flag set, copy kept).
+ */
+export async function reconcileDefaultCurriculumFollowers() {
+  const trainees = await prisma.user.findMany({
+    where: { role: "TRAINEE", active: true },
+    select: { id: true },
+  });
+  let markedCustom = 0;
+  let clearedCopies = 0;
+
+  for (const t of trainees) {
+    const personalCount = await prisma.curriculumDay.count({
+      where: { scopeKey: t.id },
+    });
+    if (personalCount === 0) continue;
+
+    const usesCustom = await traineeUsesCustomCurriculum(t.id);
+    if (usesCustom) continue;
+
+    if (await personalCurriculumDiffersFromGlobal(t.id)) {
+      await setTraineeUsesCustomCurriculum(t.id, true);
+      markedCustom += 1;
+      continue;
+    }
+
+    await prisma.curriculumDay.deleteMany({ where: { scopeKey: t.id } });
+    clearedCopies += 1;
+  }
+
+  return { markedCustom, clearedCopies };
+}
+
 /** Clone GLOBAL schedule into a personal copy for this trainee (idempotent if already custom). */
 export async function enableCustomCurriculumForTrainee(traineeId: string) {
+  await setTraineeUsesCustomCurriculum(traineeId, true);
+
   const existing = await prisma.curriculumDay.count({ where: { scopeKey: traineeId } });
   if (existing > 0) {
     return { created: false, days: await listCurriculumDays(traineeId) };
@@ -744,10 +898,7 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
   const globalDays = await prisma.curriculumDay.findMany({
     where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
     orderBy: { dayNumber: "asc" },
-    include: {
-      checklistItems: { orderBy: { sortOrder: "asc" } },
-      lessons: { orderBy: { sortOrder: "asc" } },
-    },
+    include: curriculumDayCloneInclude,
   });
 
   if (globalDays.length === 0) {
@@ -757,32 +908,7 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
   await prisma.$transaction(
     globalDays.map((day) =>
       prisma.curriculumDay.create({
-        data: {
-          scopeKey: traineeId,
-          dayNumber: day.dayNumber,
-          title: day.title,
-          dayType: day.dayType,
-          projectName: day.projectName,
-          hrmsProjectId: day.hrmsProjectId,
-          description: day.description,
-          checklistItems: {
-            create: day.checklistItems.map((item) => ({
-              title: item.title,
-              description: item.description,
-              kind: item.kind === "WORK" ? "WORK" : "CHECKLIST",
-              assignedHours: item.assignedHours ?? null,
-              productionTarget: item.productionTarget ?? null,
-              sortOrder: item.sortOrder,
-            })),
-          },
-          lessons: {
-            create: day.lessons.map((link) => ({
-              lessonId: link.lessonId,
-              label: link.label,
-              sortOrder: link.sortOrder,
-            })),
-          },
-        },
+        data: curriculumDayCreateData(traineeId, day),
       })
     )
   );
@@ -790,51 +916,29 @@ export async function enableCustomCurriculumForTrainee(traineeId: string) {
   return { created: true, days: await listCurriculumDays(traineeId) };
 }
 
-/** Remove personal schedule and re-copy the current GLOBAL default onto this trainee. */
+/** Follow live GLOBAL default again (drops personal copy and custom flag). */
 export async function resetTraineeCurriculumToDefault(traineeId: string) {
   await prisma.curriculumDay.deleteMany({ where: { scopeKey: traineeId } });
-  return enableCustomCurriculumForTrainee(traineeId);
+  await setTraineeUsesCustomCurriculum(traineeId, false);
+  return {
+    created: false,
+    days: await listCurriculumDays(GLOBAL_CURRICULUM_SCOPE),
+  };
 }
 
-/**
- * Ensure every trainee has a personal copy of the default schedule.
- * Safe to call on Users / Curriculum page load. Skips trainees who already have a custom schedule.
- */
+/** Safe on Curriculum / Users page load: align default followers with live GLOBAL. */
 export async function backfillDefaultCurriculumForTrainees() {
   const globalCount = await prisma.curriculumDay.count({
     where: { scopeKey: GLOBAL_CURRICULUM_SCOPE },
   });
-  if (globalCount === 0) return { assigned: 0, skipped: 0 };
+  if (globalCount === 0) return { markedCustom: 0, clearedCopies: 0 };
 
-  const trainees = await prisma.user.findMany({
-    where: { role: "TRAINEE", active: true },
-    select: { id: true },
-  });
-  if (trainees.length === 0) return { assigned: 0, skipped: 0 };
-
-  const customScopes = await prisma.curriculumDay.findMany({
-    where: { scopeKey: { in: trainees.map((t) => t.id) } },
-    select: { scopeKey: true },
-    distinct: ["scopeKey"],
-  });
-  const hasCustom = new Set(customScopes.map((c) => c.scopeKey));
-
-  let assigned = 0;
-  let skipped = 0;
-  for (const t of trainees) {
-    if (hasCustom.has(t.id)) {
-      skipped += 1;
-      continue;
-    }
-    try {
-      const result = await enableCustomCurriculumForTrainee(t.id);
-      if (result.created) assigned += 1;
-      else skipped += 1;
-    } catch (e) {
-      console.error(`Default curriculum assign failed for ${t.id}:`, e);
-    }
+  try {
+    return await reconcileDefaultCurriculumFollowers();
+  } catch (e) {
+    console.error("Reconcile default curriculum followers failed:", e);
+    return { markedCustom: 0, clearedCopies: 0 };
   }
-  return { assigned, skipped };
 }
 
 /** Max days Admin/TL can append in one extend action. */

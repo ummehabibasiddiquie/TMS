@@ -87,6 +87,8 @@ model TraineeProfile {
   trainingStatus     String   @default("REGISTERED")
   readyForProduction Boolean  @default(false)
   currentDayNumber   Int      @default(0)
+  /// When false, trainee follows the live GLOBAL default template. When true, uses personal scopeKey copy only.
+  usesCustomCurriculum Boolean @default(false)
   /// Admin/TL can force the trainee onto this day (or later) even if earlier checklist is incomplete.
   forcedCurrentDayNumber Int?
   /// Increments when Admin adds an extra week so a new final-quiz attempt is allowed.

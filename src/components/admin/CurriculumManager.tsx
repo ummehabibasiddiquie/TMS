@@ -344,7 +344,7 @@ export function CurriculumManager() {
     if (!traineeId) return;
     if (
       !confirm(
-        "Replace this trainee’s schedule with a fresh copy of the current default schedule? Their custom day edits will be lost."
+        "Stop using a custom schedule and follow the live default template again? Their personal copy and custom day edits will be removed."
       )
     ) {
       return;
@@ -367,7 +367,7 @@ export function CurriculumManager() {
       setEditing(false);
       await load();
       await loadTrainees();
-      setMsg("Schedule reset to a fresh copy of the default. You can customize it again for this trainee.");
+      setMsg("This trainee now follows the live default template (same as new default days you add).");
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -583,7 +583,7 @@ export function CurriculumManager() {
             {trainees.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
-                {t.isCustom ? " · custom" : ""} — {t.email}
+                {t.isCustom ? " · custom" : " · default"} — {t.email}
               </option>
             ))}
           </select>
@@ -595,11 +595,12 @@ export function CurriculumManager() {
           </p>
         ) : !traineeId ? (
           <p className="max-w-md text-xs text-slate-400 sm:pb-2">
-            Trainees use their own copy of this template. When you add, change, or remove{" "}
-            <strong className="font-medium text-slate-300">training work</strong> on a day here,
-            that day&apos;s work updates for trainees who have{" "}
-            <strong className="font-medium text-slate-300">not finished that day</strong> yet.
-            Completed days stay as they were for that trainee.
+            Trainees on the <strong className="font-medium text-slate-300">default track</strong> see
+            this template live — new days appear automatically. Use{" "}
+            <strong className="font-medium text-slate-300">Customize for this trainee</strong> only
+            when someone needs their own schedule; custom trainees are not changed when you edit the
+            default. Training-work updates on a default day still apply only to default trainees still
+            on that day or earlier (not past it).
           </p>
         ) : null}
         {traineeId && (
@@ -622,7 +623,7 @@ export function CurriculumManager() {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
               >
                 <RotateCcw className="h-4 w-4" />
-                Reset to default copy
+                Reset to default track
               </button>
             )}
             {traineeId && traineePercent != null && traineePercent < 90 ? (
@@ -664,8 +665,8 @@ export function CurriculumManager() {
           }`}
         >
           {isCustom
-            ? `Editing personal schedule for ${traineeLabel}. Changes do not affect other trainees.`
-            : `${traineeLabel} does not have a personal schedule yet. Click “Customize for this trainee” to assign a copy of the default you can edit.`}
+            ? `Editing personal schedule for ${traineeLabel}. Changes do not affect other trainees or the default template.`
+            : `${traineeLabel} follows the live default template (read-only here). Click “Customize for this trainee” to give them a separate schedule.`}
         </p>
       )}
 

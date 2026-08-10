@@ -134,9 +134,8 @@ export async function GET(req: Request) {
 
   const rows = await Promise.all(
     trainees.map(async (t) => {
-      const [plan, customCount, evaluation, scope] = await Promise.all([
+      const [plan, evaluation, scope] = await Promise.all([
         getDayWisePlan(t.id),
-        prisma.curriculumDay.count({ where: { scopeKey: t.id } }),
         getTraineeEvaluationScore(t.id),
         resolveCurriculumScope(t.id),
       ]);
@@ -182,8 +181,8 @@ export async function GET(req: Request) {
         trainingStatus: plan.trainingStatus,
         readyForProduction: plan.readyForProduction,
         canExtendWeek,
-        isCustom: customCount > 0,
-        scheduleSource: plan.isCustom ? "custom" : "default",
+        isCustom: scope.isCustom,
+        scheduleSource: scope.isCustom ? "custom" : "default",
         finalQuizScore: evaluation.score,
         lastFinalQuizScore: evaluation.lastFinalQuizScore,
         finalQuizAttemptedAt: evaluation.attemptedAt,

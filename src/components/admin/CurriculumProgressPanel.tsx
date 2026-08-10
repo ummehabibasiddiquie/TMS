@@ -473,9 +473,17 @@ export function CurriculumProgressPanel() {
         </p>
       )}
 
-      {rows.length === 0 ? (
+      {error ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+          {error}
+        </p>
+      ) : null}
+
+      {!error && rows.length === 0 ? (
         <p className="text-sm text-slate-600 dark:text-slate-500">No trainees found.</p>
-      ) : (
+      ) : null}
+
+      {rows.length > 0 ? (
         <div
           className={`${listShell} ${busyId ? "pointer-events-none opacity-70" : ""}`}
         >
@@ -840,7 +848,7 @@ export function CurriculumProgressPanel() {
             })}
           </ul>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

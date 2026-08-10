@@ -8,7 +8,6 @@ import {
   assertUserIsTrainer,
   ensureTraineeProfile,
 } from "@/lib/trainee-profile";
-import { enableCustomCurriculumForTrainee } from "@/lib/day-wise-training";
 
 export async function GET(req: Request) {
   const user = await requireSession(["ADMIN", "TRAINER"]);
@@ -153,6 +152,7 @@ export async function POST(req: Request) {
                 create: {
                   trainerId: nextTrainerId,
                   qaId: nextQaId,
+                  usesCustomCurriculum: false,
                 },
               },
             }
@@ -177,15 +177,6 @@ export async function POST(req: Request) {
         },
       },
     });
-
-    // New trainees get a personal copy of the default day curriculum (Admin/TL can customize later)
-    if (effectiveRole === "TRAINEE") {
-      try {
-        await enableCustomCurriculumForTrainee(newUser.id);
-      } catch (e) {
-        console.error("Assign default curriculum failed:", e);
-      }
-    }
 
     return NextResponse.json({ user: newUser }, { status: 201 });
   } catch (error) {
