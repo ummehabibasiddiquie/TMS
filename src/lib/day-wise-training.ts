@@ -62,8 +62,8 @@ export type DaySnapshot = {
   /** True when checklist, lessons, and work (if any) are fully complete — used in UI and metrics. */
   done: boolean;
   /**
-   * True when checklist+lessons gate passes (empty days pass; work does not block).
-   * Used only to compute which calendar day the trainee is on.
+   * True when checklist, lessons, and (if required) manager Work Metrics are done —
+   * used to compute which training day is open next.
    */
   unlockDone: boolean;
   /** When checklist+lessons were all completed (max item completedAt). */
@@ -133,6 +133,35 @@ function overallLearningPercent(snapshots: DaySnapshot[]): number {
     total += s.totalCount;
   }
   return toPercent(completed, total);
+}
+
+/** Which day the trainee should be on, from unlock gates and any prior promotion. */
+function computeAutoDay(
+  snapshots: DaySnapshot[],
+  profileCurrentDay: number,
+  firstDayNumber: number
+): number {
+  const sorted = [...snapshots].sort((a, b) => a.dayNumber - b.dayNumber);
+  if (sorted.length === 0) return 1;
+
+  let scanDay = firstDayNumber;
+  for (const s of sorted) {
+    if (!s.unlockDone) {
+      scanDay = s.dayNumber;
+      break;
+    }
+    scanDay = s.dayNumber;
+  }
+
+  const openDay = Math.max(profileCurrentDay || 1, firstDayNumber);
+  if (openDay <= scanDay) return scanDay;
+
+  // Promoted ahead (e.g. Day 3 while Day 2 course still open): only the open day gates the next step.
+  const openSnap = sorted.find((s) => s.dayNumber === openDay);
+  if (!openSnap?.unlockDone) return openDay;
+  const idx = sorted.findIndex((s) => s.dayNumber === openDay);
+  const next = sorted[idx + 1];
+  return next ? next.dayNumber : openDay;
 }
 
 export async function traineeUsesCustomCurriculum(userId: string): Promise<boolean> {
@@ -615,14 +644,12 @@ export async function getDayWisePlan(userId: string): Promise<DayWisePlan> {
 
   const byNumber = new Map(snapshots.map((s) => [s.dayNumber, s]));
 
-  let autoDay = Math.max(profile?.currentDayNumber || 1, days[0].dayNumber);
-  for (const s of snapshots) {
-    if (!s.unlockDone) {
-      autoDay = s.dayNumber;
-      break;
-    }
-    autoDay = s.dayNumber;
-  }
+  const firstDay = days[0]?.dayNumber ?? 1;
+  let autoDay = computeAutoDay(
+    snapshots,
+    profile?.currentDayNumber || 1,
+    firstDay
+  );
 
   const maxDay = days[days.length - 1]?.dayNumber ?? autoDay;
   const forced = profile?.forcedCurrentDayNumber;

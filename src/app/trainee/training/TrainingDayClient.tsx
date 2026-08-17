@@ -229,7 +229,8 @@ function TrainingWorkPanel({
       </h3>
       <p className="mb-3 text-xs text-slate-600 dark:text-slate-500">
         Hours, production, and quality are recorded by Admin or your Team Lead in Work Metrics.
-        Missing work numbers do not block the next day.
+        Work metrics are entered by Admin or your Team Lead. When this day requires
+        training work, metrics must be saved before the next day opens.
       </p>
       {workLoading && <p className="mb-2 text-xs text-slate-500">Loading work data…</p>}
       {workMessage && !workLoading && (
