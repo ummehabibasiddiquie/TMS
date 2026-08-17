@@ -279,11 +279,14 @@ async function buildDaySnapshot(
     checklistGateTotal === 0 ||
     checklistDoneCount + lessonDoneCount === checklistGateTotal;
 
-  const workRequired = workItems.length > 0;
+  const workRequired =
+    workItems.length > 0 || Boolean(day.hrmsProjectId?.trim());
   const isBlankDay = checklistGateTotal === 0 && !workRequired;
 
-  // Unlock / current-day: work never blocks. Blank days do not block advancing.
-  const unlockDone = checklistGateTotal === 0 || checklistGateDone;
+  // Unlock next day: checklist + lessons done; training work needs manager Work Metrics.
+  const unlockDone =
+    (checklistGateTotal === 0 || checklistGateDone) &&
+    (!workRequired || workMetricsSubmitted);
 
   // Metrics + "completed day": checklist, lessons, and work (when required) must be done.
   const displayDone =

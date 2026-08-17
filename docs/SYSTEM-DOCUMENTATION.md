@@ -38,10 +38,10 @@ Internal platform for:
 ## 3. Architecture
 
 ```text
-┌─────────────┐     ┌──────────────────────┐     ┌─────────────┐
-│   Browser   │────▶│  Next.js App Router   │────▶│   MySQL     │
-│  (React UI) │     │  Server Components    │     │  (Prisma)   │
-└─────────────┘     │  + API Routes (/api)  │     └─────────────┘
+┌─────────────┐     ┌──────────────────────┐    ┌─────────────┐
+│   Browser   │───▶│  Next.js App Router  | ──▶│   MySQL     │
+│  (React UI) │     │  Server Components   │    │  (Prisma)   │
+└─────────────┘     │  + API Routes (/api) │    └─────────────┘
                     └──────────────────────┘
 ```
 
