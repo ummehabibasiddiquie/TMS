@@ -336,6 +336,8 @@ server {
     listen [::]:80;
     server_name tms.tfshrms.cloud;
 
+    client_max_body_size 1024m;
+
     location / {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
@@ -424,6 +426,8 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/tms.tfshrms.cloud/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 1024m;
 
     location / {
         proxy_pass http://127.0.0.1:3001;
@@ -546,6 +550,8 @@ You should see **`tfshrms.cloud`** (HRMS) and **`tms.tfshrms.cloud`** (TMS) as *
 | **curl (60) SSL** hostname mismatch | `certbot --nginx -d tms.tfshrms.cloud` → option **1** reinstall |
 | **502 Bad Gateway** | `pm2 list` → `tms` online; Nginx port = PM2 `PORT` |
 | **Page looks like plain HTML** (stacked links, no sidebar/Tailwind) | **`git pull` alone is not enough.** Run `npm install`, **`npm run build`**, then **`pm2 restart tms`**. Or: `bash scripts/vps-deploy.sh`. In browser DevTools → Network, `/_next/static/css/*.css` must be **200**, not 404. |
+| **Upload failed / 413 Request Entity Too Large** (Excel, video, PDF) | Nginx default limit is **1 MB**. Add `client_max_body_size 1024m;` inside the `server { }` block for `tms.tfshrms.cloud`, then `sudo nginx -t && sudo systemctl reload nginx`. App limits: documents **25 MB**, videos **1 GB**. |
+| **Upload OK but Open/download → Page not found** | File is on disk under `~/tms/public/uploads/` but Next.js did not serve it. Deploy latest `main` (includes `/uploads/[...path]` route handler), then `bash scripts/vps-deploy.sh`. On server verify: `ls -la ~/tms/public/uploads/`. Optional Nginx direct serve: `location /uploads/ { alias /root/tms/public/uploads/; }` before `location /`. |
 | Wrong password-reset links | `BASE_URL=https://tms.tfshrms.cloud` in `.env` |
 
 ---

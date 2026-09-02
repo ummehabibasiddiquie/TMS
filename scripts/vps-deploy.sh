@@ -4,6 +4,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+echo "==> ensure upload directories"
+mkdir -p public/uploads public/uploads/certificates
+
 echo "==> npm install"
 npm install
 

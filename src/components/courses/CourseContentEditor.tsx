@@ -104,6 +104,23 @@ function acceptForType(contentType: string) {
   return ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,application/pdf";
 }
 
+const DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
+const VIDEO_MAX_BYTES = 1024 * 1024 * 1024;
+
+function uploadErrorMessage(status: number, data: { error?: string }): string {
+  if (status === 413) {
+    return "File too large for the server. Excel/PDF max 25 MB. If the file is smaller, ask admin to raise Nginx upload limit (client_max_body_size).";
+  }
+  if (data.error) return data.error;
+  if (status >= 400) return `Upload failed (HTTP ${status})`;
+  return "Upload failed";
+}
+
+function maxBytesForFile(contentType: string): number {
+  if (contentType === "VIDEO") return VIDEO_MAX_BYTES;
+  return DOCUMENT_MAX_BYTES;
+}
+
 function ContentUrlField({
   contentType,
   value,
@@ -126,6 +143,15 @@ function ContentUrlField({
   }
 
   function handleUpload(file: File) {
+    const maxBytes = maxBytesForFile(contentType);
+    if (file.size > maxBytes) {
+      const maxMb = Math.round(maxBytes / (1024 * 1024));
+      const fileMb = (file.size / (1024 * 1024)).toFixed(1);
+      setError(`File is ${fileMb} MB. Maximum for this type is ${maxMb} MB.`);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setBusy(true);
     setProgress(0);
     setError("");
@@ -143,15 +169,20 @@ function ContentUrlField({
 
     xhr.onload = () => {
       try {
-        const data = JSON.parse(xhr.responseText || "{}");
-        if (xhr.status >= 200 && xhr.status < 300 && data.url) {
+        let data: { error?: string } = {};
+        try {
+          data = JSON.parse(xhr.responseText || "{}");
+        } catch {
+          /* nginx/HTML error body */
+        }
+        if (xhr.status >= 200 && xhr.status < 300 && "url" in data && data.url) {
           setProgress(100);
-          onChange(data.url);
+          onChange((data as { url: string }).url);
         } else {
-          setError(data.error || "Upload failed");
+          setError(uploadErrorMessage(xhr.status, data));
         }
       } catch {
-        setError("Upload failed");
+        setError(uploadErrorMessage(xhr.status, {}));
       } finally {
         setBusy(false);
         if (inputRef.current) inputRef.current.value = "";

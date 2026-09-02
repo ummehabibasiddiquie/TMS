@@ -15,6 +15,7 @@ import {
 import { ProgressRing } from "@/components/learning/ProgressRing";
 import { LessonQuizExam } from "@/components/learning/LessonQuizExam";
 import { cn } from "@/lib/utils";
+import { resolveMediaUrl } from "@/lib/upload-files";
 
 function isUploadedOrDirectMedia(url: string) {
   return /\.(mp4|webm|ogg|mov|avi)(\?|#|$)/i.test(url);
@@ -66,7 +67,7 @@ function UploadedVideoPlayer({ url, title }: { url: string; title: string }) {
 }
 
 function TopicMedia({ topic }: { topic: Topic }) {
-  const url = topic.contentUrl?.trim() || "";
+  const url = resolveMediaUrl(topic.contentUrl ?? "");
 
   if (topic.contentType === "VIDEO" && url) {
     if (isUploadedOrDirectMedia(url)) {
